@@ -10,9 +10,11 @@ bin/
 
 # IDE / editor config
 .idea/
+idea/
 *.iml
 .vscode/
 .settings/
+settings/
 .project
 .classpath
 
@@ -21,5 +23,7 @@ bin/
 .env.*
 
 # Local development config with secrets
+dev.yml
+**/dev.yml
 application-dev.yml
 **/application-dev.yml
