@@ -13,6 +13,7 @@ bin/
 idea/
 *.iml
 .vscode/
+.mvn/
 .settings/
 settings/
 .project
