@@ -7,8 +7,11 @@ import com.alibaba.cloud.ai.dashscope.chat.DashScopeChatModel;
 import cn.hutool.json.JSONArray;
 import cn.hutool.json.JSONObject;
 import cn.hutool.json.JSONUtil;
+import dev.langchain4j.community.model.dashscope.QwenChatModel;
+import dev.langchain4j.community.model.dashscope.QwenModelName;
 import java.nio.charset.StandardCharsets;
 import java.util.List;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.chat.messages.UserMessage;
@@ -30,14 +33,24 @@ class DashScopeTest {
     @Value("${spring.ai.dashscope.api-key}")
     private String apiKey;
 
+    private QwenChatModel qwenChatModel;
+
     @Autowired
     private DashScopeChatModel dashScopeChatModel;
 
     @Autowired
     private ChatClient.Builder chatClientBuilder;
 
+    @BeforeEach
+    void setUpLangChain4jModel() {
+        qwenChatModel = QwenChatModel.builder()
+            .apiKey(apiKey)
+            .modelName(QwenModelName.QWEN_PLUS)
+            .build();
+    }
+
     @Test
-    void syncInvokeDemo() throws Exception {
+    void sdkInvokeDemo() throws Exception {
         System.out.println("当前系统编码: " + System.getProperty("file.encoding"));
 
         // 原生 DashScope SDK 写法（已废弃，保留对照）
@@ -65,14 +78,14 @@ class DashScopeTest {
     }
 
     @Test
-    void chatClientInvoke() {
+    void springAiInvokeDemo() {
         ChatClient chatClient = chatClientBuilder.build();
         String content = chatClient.prompt("你好，你是谁？").call().content();
         System.out.println("ChatClient response: " + content);
     }
 
     @Test
-    void testHttpChat() {
+    void httpClientInvokeDemo() {
         JSONObject message = JSONUtil.createObj()
             .set("role", "user")
             .set("content", "你好，你是谁？");
@@ -91,5 +104,11 @@ class DashScopeTest {
 
         String responseBody = response.body();
         System.out.println("HTTP Response Body: " + responseBody);
+    }
+
+    @Test
+    void langchain4jInvokeDemo() {
+        String response = qwenChatModel.chat("你是谁？用 LangChain4j 规范回答。");
+        System.out.println("LangChain4j response: " + response);
     }
 }

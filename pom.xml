@@ -26,6 +26,7 @@
         <spring-ai-alibaba-extensions.version>1.1.2.1</spring-ai-alibaba-extensions.version>
         <hutool.version>5.8.38</hutool.version>
         <knife4j.version>4.4.0</knife4j.version>
+        <langchain4j-dashscope.version>1.13.1-beta23</langchain4j-dashscope.version>
     </properties>
 
     <dependencyManagement>
@@ -62,6 +63,12 @@
         <dependency>
             <groupId>com.alibaba.cloud.ai</groupId>
             <artifactId>spring-ai-alibaba-starter-dashscope</artifactId>
+        </dependency>
+        <!-- Source: https://mvnrepository.com/artifact/dev.langchain4j/langchain4j-community-dashscope -->
+        <dependency>
+            <groupId>dev.langchain4j</groupId>
+            <artifactId>langchain4j-community-dashscope</artifactId>
+            <version>${langchain4j-dashscope.version}</version>
         </dependency>
 
         <dependency>
