@@ -3,18 +3,18 @@ package com.gen.ai;
 import cn.hutool.http.Header;
 import cn.hutool.http.HttpResponse;
 import cn.hutool.http.HttpUtil;
+import com.alibaba.cloud.ai.dashscope.chat.DashScopeChatModel;
 import cn.hutool.json.JSONArray;
 import cn.hutool.json.JSONObject;
 import cn.hutool.json.JSONUtil;
-import cn.hutool.core.util.StrUtil;
-import com.alibaba.dashscope.aigc.generation.Generation;
-import com.alibaba.dashscope.aigc.generation.GenerationParam;
-import com.alibaba.dashscope.aigc.generation.GenerationResult;
-import com.alibaba.dashscope.common.Message;
-import com.alibaba.dashscope.common.Role;
 import java.nio.charset.StandardCharsets;
 import java.util.List;
 import org.junit.jupiter.api.Test;
+import org.springframework.ai.chat.client.ChatClient;
+import org.springframework.ai.chat.messages.UserMessage;
+import org.springframework.ai.chat.model.ChatResponse;
+import org.springframework.ai.chat.prompt.Prompt;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.test.context.ActiveProfiles;
@@ -27,29 +27,48 @@ class DashScopeTest {
         System.setOut(new java.io.PrintStream(System.out, true, java.nio.charset.StandardCharsets.UTF_8));
     }
 
-    @Value("${dashscope.api-key}")
+    @Value("${spring.ai.dashscope.api-key}")
     private String apiKey;
+
+    @Autowired
+    private DashScopeChatModel dashScopeChatModel;
+
+    @Autowired
+    private ChatClient.Builder chatClientBuilder;
 
     @Test
     void syncInvokeDemo() throws Exception {
         System.out.println("当前系统编码: " + System.getProperty("file.encoding"));
+
+        // 原生 DashScope SDK 写法（已废弃，保留对照）
+        /*
         Generation generation = new Generation();
-
         Message userMessage = Message.builder()
-                .role(Role.USER.getValue())
-                .content("你好，你是谁？")
-                .build();
-
+            .role(Role.USER.getValue())
+            .content("你好，你是谁？")
+            .build();
         GenerationParam param = GenerationParam.builder()
-                .apiKey(apiKey)
-                .model("qwen-plus")
-                .messages(List.of(userMessage))
-                .resultFormat(GenerationParam.ResultFormat.MESSAGE)
-                .build();
-
+            .apiKey(apiKey)
+            .model("qwen-plus")
+            .messages(List.of(userMessage))
+            .resultFormat(GenerationParam.ResultFormat.MESSAGE)
+            .build();
         GenerationResult result = generation.call(param);
         String content = result.getOutput().getChoices().get(0).getMessage().getContent();
         System.out.println("DashScope response: " + content);
+        */
+
+        // SAA / Spring AI 写法：DashScopeChatModel
+        ChatResponse response = dashScopeChatModel.call(new Prompt(List.of(new UserMessage("你好，你是谁？"))));
+        String content = response.getResult().getOutput().getText();
+        System.out.println("DashScopeChatModel response: " + content);
+    }
+
+    @Test
+    void chatClientInvoke() {
+        ChatClient chatClient = chatClientBuilder.build();
+        String content = chatClient.prompt("你好，你是谁？").call().content();
+        System.out.println("ChatClient response: " + content);
     }
 
     @Test
