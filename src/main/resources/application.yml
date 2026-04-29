@@ -6,6 +6,9 @@ server:
 spring:
   config:
     import: optional:classpath:application-dev.yml
+  profiles:
+    active:
+    - dev
 
     # springdoc-openapi项目配置
 springdoc:

@@ -28,3 +28,8 @@ dev.yml
 **/dev.yml
 application-dev.yml
 **/application-dev.yml
+
+# Log files
+/logs/
+*.log
+
