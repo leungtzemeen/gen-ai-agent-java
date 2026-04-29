@@ -30,6 +30,7 @@
         <hutool.version>5.8.38</hutool.version>
         <knife4j.version>4.4.0</knife4j.version>
         <jsonschema-generator.version>4.38.0</jsonschema-generator.version>
+        <kryo.version>5.6.2</kryo.version>
     </properties>
 
     <dependencyManagement>
@@ -100,10 +101,18 @@
             <groupId>dev.langchain4j</groupId>
             <artifactId>langchain4j-open-ai-spring-boot-starter</artifactId>
         </dependency>
+        <!-- 支持结构化输出 -->
         <dependency>
             <groupId>com.github.victools</groupId>
             <artifactId>jsonschema-generator</artifactId>
             <version>${jsonschema-generator.version}</version>
+            <scope>compile</scope>
+        </dependency>
+        <!-- 支持文件回话记忆持久化的序列化 -->
+        <dependency>
+            <groupId>com.esotericsoftware</groupId>
+            <artifactId>kryo</artifactId>
+            <version>${kryo.version}</version>
             <scope>compile</scope>
         </dependency>
         <dependency>

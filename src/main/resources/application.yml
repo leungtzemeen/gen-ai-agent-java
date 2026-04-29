@@ -27,3 +27,12 @@ knife4j:
   enable: true
   setting:
     language: zh_cn
+
+# application.yml
+app:
+  storage:
+    # root: ${user.home}/data/gen-ai-agent  # 统一根目录，支持跨平台
+    root: ./data/gen-ai-agent  # 统一根目录，支持跨平台
+    chat-history: ${app.storage.root}/history
+    rag-docs: ${app.storage.root}/knowledge
+    vector-db: ${app.storage.root}/vector-store

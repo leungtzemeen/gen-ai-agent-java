@@ -107,21 +107,24 @@ class DashScopeTest {
 
     @Test
     void aiShoppingGuideAppDoChatDemo() {
-        String chaId = UUID.randomUUID().toString();
+        // String chaId = UUID.randomUUID().toString();
+        String chaId = "c7b04518-e6b7-4c7b-8d02-8a9d16a1b241";
         // 第一轮
-        String message = "你好，我是国际影坛巨星梁朝伟";
+        String message = "你好，你知道我的另一半是谁吗？";
+        // String message = "你好，你知道我是谁吗？";
+        // String message = "你好，我是国际影坛巨星梁朝伟";
         // String message = "我想给我的另一半“张曼玉”买点东西";
         String answer = aiShoppingGuideApp.doChat(message, chaId);
         Assertions.assertNotNull(answer);
         // 第二轮
-        message = "我想给我的另一半“张曼玉”买点东西";
-        // message = "你好，我是国际影坛巨星梁朝伟";
-        answer = aiShoppingGuideApp.doChat(message, chaId);
-        Assertions.assertNotNull(answer);
-        // 第三轮
-        message = "我的另一半叫什么来着？我刚刚和你说过，你帮我回忆一下";
-        answer = aiShoppingGuideApp.doChat(message, chaId);
-        Assertions.assertNotNull(answer);
+        // message = "我想给我的另一半“张曼玉”买点东西";
+        // // message = "你好，我是国际影坛巨星梁朝伟";
+        // answer = aiShoppingGuideApp.doChat(message, chaId);
+        // Assertions.assertNotNull(answer);
+        // // 第三轮
+        // message = "我的另一半叫什么来着？我刚刚和你说过，你帮我回忆一下";
+        // answer = aiShoppingGuideApp.doChat(message, chaId);
+        // Assertions.assertNotNull(answer);
     }
 
     @Test

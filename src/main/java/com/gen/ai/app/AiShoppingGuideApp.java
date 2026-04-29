@@ -7,8 +7,6 @@ import java.util.Map;
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.chat.client.advisor.MessageChatMemoryAdvisor;
 import org.springframework.ai.chat.memory.ChatMemory;
-import org.springframework.ai.chat.memory.InMemoryChatMemoryRepository;
-import org.springframework.ai.chat.memory.MessageWindowChatMemory;
 import org.springframework.ai.chat.model.ChatResponse;
 import org.springframework.ai.chat.prompt.SystemPromptTemplate;
 import org.springframework.beans.factory.annotation.Value;
@@ -30,13 +28,9 @@ public class AiShoppingGuideApp {
 
         public AiShoppingGuideApp(
                         DashScopeChatModel dashScopeChatModel,
+                        ChatMemory chatMemory,
                         @Value("classpath:/prompts/assistant-guide.st") Resource systemResource) {
                 this.systemResource = systemResource;
-
-                ChatMemory chatMemory = MessageWindowChatMemory.builder()
-                                .chatMemoryRepository(new InMemoryChatMemoryRepository())
-                                .maxMessages(10)
-                                .build();
                 this.chatClient = ChatClient.builder(dashScopeChatModel)
                                 .defaultAdvisors(
                                                 MessageChatMemoryAdvisor.builder(chatMemory).build(),
