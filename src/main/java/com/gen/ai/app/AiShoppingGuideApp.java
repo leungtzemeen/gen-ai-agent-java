@@ -6,9 +6,11 @@ import java.util.Map;
 
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.chat.client.advisor.MessageChatMemoryAdvisor;
+import org.springframework.ai.chat.client.advisor.vectorstore.QuestionAnswerAdvisor;
 import org.springframework.ai.chat.memory.ChatMemory;
 import org.springframework.ai.chat.model.ChatResponse;
 import org.springframework.ai.chat.prompt.SystemPromptTemplate;
+import org.springframework.ai.vectorstore.VectorStore;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.core.io.Resource;
 import org.springframework.stereotype.Component;
@@ -29,11 +31,13 @@ public class AiShoppingGuideApp {
         public AiShoppingGuideApp(
                         DashScopeChatModel dashScopeChatModel,
                         ChatMemory chatMemory,
+                        VectorStore vectorStore,
                         @Value("classpath:/prompts/assistant-guide.st") Resource systemResource) {
                 this.systemResource = systemResource;
                 this.chatClient = ChatClient.builder(dashScopeChatModel)
                                 .defaultAdvisors(
                                                 MessageChatMemoryAdvisor.builder(chatMemory).build(),
+                                                QuestionAnswerAdvisor.builder(vectorStore).build(),
                                                 new AppLoggerAdvisor())
                                 .build();
         }

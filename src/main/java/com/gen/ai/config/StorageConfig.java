@@ -1,5 +1,6 @@
 package com.gen.ai.config;
 
+import java.io.File;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -7,6 +8,9 @@ import java.nio.file.Path;
 import org.springframework.ai.chat.memory.ChatMemory;
 import org.springframework.ai.chat.memory.ChatMemoryRepository;
 import org.springframework.ai.chat.memory.MessageWindowChatMemory;
+import org.springframework.ai.embedding.EmbeddingModel;
+import org.springframework.ai.vectorstore.SimpleVectorStore;
+import org.springframework.ai.vectorstore.VectorStore;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -45,6 +49,20 @@ public class StorageConfig {
                 .chatMemoryRepository(repository)
                 .maxMessages(10) // 💡 逻辑层：在这里控制记忆长度
                 .build();
+    }
+
+    @Bean
+    public VectorStore vectorStore(EmbeddingModel dashscopeEmbeddingModel) {
+        // 这是一个本地文件版的向量数据库，它会把索引存在你配置的 vector-db 路径下
+        String vectorDbPath = storageProperties.getVectorDb();
+        SimpleVectorStore vectorStore = SimpleVectorStore.builder(dashscopeEmbeddingModel).build();
+
+        File vectorFile = new File(vectorDbPath);   
+        if (vectorFile.exists()) {
+            // 启动时自动加载之前存好的知识
+            vectorStore.load(vectorFile);
+        }
+        return vectorStore;
     }
 
     private static void createDirIfConfigured(String dir) {
