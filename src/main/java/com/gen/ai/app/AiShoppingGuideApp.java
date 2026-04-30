@@ -15,7 +15,6 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.core.io.Resource;
 import org.springframework.stereotype.Component;
 
-import com.alibaba.cloud.ai.dashscope.chat.DashScopeChatModel;
 import com.gen.ai.advisor.AppLoggerAdvisor;
 
 import lombok.extern.slf4j.Slf4j;
@@ -29,12 +28,13 @@ public class AiShoppingGuideApp {
         private final Resource systemResource;
 
         public AiShoppingGuideApp(
-                        DashScopeChatModel dashScopeChatModel,
+                        ChatClient.Builder chatClientBuilder,
                         ChatMemory chatMemory,
                         VectorStore vectorStore,
                         @Value("classpath:/prompts/assistant-guide.st") Resource systemResource) {
                 this.systemResource = systemResource;
-                this.chatClient = ChatClient.builder(dashScopeChatModel)
+                // 使用 Spring Boot 自动装配的 Builder，确保 Functions 等能力可通过名称解析并生效
+                this.chatClient = chatClientBuilder
                                 .defaultAdvisors(
                                                 MessageChatMemoryAdvisor.builder(chatMemory).build(),
                                                 QuestionAnswerAdvisor.builder(vectorStore).build(),
@@ -46,14 +46,21 @@ public class AiShoppingGuideApp {
                 String dynamicSystem = new SystemPromptTemplate(systemResource)
                                 .createMessage(Map.of("current_date", LocalDate.now().toString()))
                                 .getText();
+                dynamicSystem = dynamicSystem
+                                + System.lineSeparator()
+                                + "当你需要查询商品具体的实时价格或库存时，请务必使用工具进行查询，不要凭空猜测。"
+                                + "如果知识库（RAG）里没有实时价格或库存信息，必须调用工具获取。";
                 ChatResponse response = chatClient
                                 .prompt()
                                 .system(dynamicSystem)
                                 .user(message)
+                                .toolNames("getProductPriceFunction", "getProductStockFunction")
                                 .advisors(spec -> spec.param(ChatMemory.CONVERSATION_ID, chatId))
                                 .call()
                                 .chatResponse();
-                String content = response.getResult().getOutput().getText();
+                String content = response == null || response.getResult() == null || response.getResult().getOutput() == null
+                                ? ""
+                                : response.getResult().getOutput().getText();
                 log.info(">>>> [AI Request] content: {}", content);
                 return content;
         }

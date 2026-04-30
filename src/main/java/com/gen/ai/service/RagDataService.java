@@ -1,4 +1,4 @@
-package com.gen.ai.rag.service;
+package com.gen.ai.service;
 
 import java.io.File;
 import java.io.IOException;
@@ -269,3 +269,4 @@ public class RagDataService {
         return sb.toString();
     }
 }
+

@@ -1,0 +1,11 @@
+# 绝对禁止 AI 扫描数据文件夹（这里是 Token 燃烧的重灾区）
+/data/
+/logs/
+*.json
+*.kryo
+*.bin
+
+# 忽略大型依赖和构建产物
+/target/
+.git/
+node_modules/
