@@ -26,7 +26,7 @@
         <spring-ai-alibaba-extensions.version>1.1.2.1</spring-ai-alibaba-extensions.version>
         <langchain4j.version>0.36.2</langchain4j.version>
         <langchain4j-community.version>0.36.0</langchain4j-community.version>
-        <swagger-core-jakarta.version>2.2.38</swagger-core-jakarta.version>
+        <springdoc.version>2.7.0</springdoc.version>
         <hutool.version>5.8.38</hutool.version>
         <knife4j.version>4.4.0</knife4j.version>
         <jsonschema-generator.version>4.38.0</jsonschema-generator.version>
@@ -70,16 +70,6 @@
                 <type>pom</type>
                 <scope>import</scope>
             </dependency>
-            <dependency>
-                <groupId>io.swagger.core.v3</groupId>
-                <artifactId>swagger-core-jakarta</artifactId>
-                <version>${swagger-core-jakarta.version}</version>
-            </dependency>
-            <dependency>
-                <groupId>io.swagger.core.v3</groupId>
-                <artifactId>swagger-annotations-jakarta</artifactId>
-                <version>${swagger-core-jakarta.version}</version>
-            </dependency>
         </dependencies>
     </dependencyManagement>
 
@@ -100,6 +90,12 @@
             <groupId>org.springframework.ai</groupId>
             <artifactId>spring-ai-advisors-vector-store</artifactId>
         </dependency>
+        <dependency>
+            <groupId>org.springdoc</groupId>
+            <artifactId>springdoc-openapi-starter-webmvc-ui</artifactId>
+            <version>${springdoc.version}</version>
+        </dependency>
+
         <dependency>
             <groupId>dev.langchain4j</groupId>
             <artifactId>langchain4j-dashscope-spring-boot-starter</artifactId>
