@@ -36,3 +36,6 @@ app:
     chat-history: ${app.storage.root}/history
     rag-docs: ${app.storage.root}/knowledge
     vector-db: ${app.storage.root}/vector-store
+    # RAG相似度阈值
+  rag:
+    similarity-threshold: 0.5

@@ -23,6 +23,12 @@ import lombok.extern.slf4j.Slf4j;
 
 @Component
 @Slf4j
+/**
+ * AI 导购应用入口（Spring 组件）。
+ * <p>
+ * 负责将用户问题与 RAG 检索到的参考资料拼接成“增强提示词”，并通过 {@link ChatClient} 调用大模型。
+ * 同时注入会话记忆（ChatMemory）与应用日志 advisor，以支持多轮对话与链路观测。
+ */
 public class AiShoppingGuideApp {
 
         private final ChatClient chatClient;
@@ -30,6 +36,13 @@ public class AiShoppingGuideApp {
         private final Resource systemResource;
         private final RagDataService ragDataService;
 
+        /**
+         * 构建导购应用实例，并基于自动装配的 {@link ChatClient.Builder} 初始化 {@link ChatClient}。
+         * <p>
+         * - 使用 {@link MessageChatMemoryAdvisor} 将 {@link ChatMemory} 挂到对话链路中（按 conversationId 区分会话）<br>
+         * - 使用 {@link AppLoggerAdvisor} 打印请求/响应关键日志<br>
+         * - 注入系统提示词模板资源（{@code classpath:/prompts/assistant-guide.st}）
+         */
         public AiShoppingGuideApp(
                         ChatClient.Builder chatClientBuilder,
                         ChatMemory chatMemory,
@@ -45,10 +58,29 @@ public class AiShoppingGuideApp {
                                 .build();
         }
 
+        /**
+         * 发起一次对话并返回文本结果（默认不按业务分类过滤 RAG）。
+         * <p>
+         * 等价于 {@link #doChat(String, String, String)} 的 category=null 版本。
+         *
+         * @param message 用户问题
+         * @param chatId  会话 ID（为空时使用 default）
+         * @return 模型输出的文本内容（可能为空字符串）
+         */
         public String doChat(String message, String chatId) {
                 return doChat(message, chatId, null);
         }
 
+        /**
+         * 发起一次对话并返回文本结果，可选按业务分类过滤 RAG 检索范围。
+         * <p>
+         * 主要步骤：渲染系统提示词模板（带 current_date）→ 拼装 RAG 参考资料与用户问题 → 调用模型并允许使用商品工具函数。
+         *
+         * @param message  用户问题
+         * @param chatId   会话 ID（为空时使用 default）
+         * @param category 业务分类（用于 RAG metadata 过滤；为空则全库检索）
+         * @return 模型输出的文本内容（可能为空字符串）
+         */
         public String doChat(String message, String chatId, String category) {
                 String dynamicSystem = new SystemPromptTemplate(systemResource)
                                 .createMessage(Map.of("current_date", LocalDate.now().toString()))
@@ -78,6 +110,15 @@ public class AiShoppingGuideApp {
                 return content;
         }
 
+        /**
+         * 将“用户问题 + RAG 检索结果”拼装为对模型更友好的输入提示词。
+         * <p>
+         * 内容包含：检索范围说明、参考资料（多个切片）、以及最终的用户问题。
+         *
+         * @param message  用户问题
+         * @param category 业务分类（不为空时会进行分区检索过滤）
+         * @return 拼装后的提示词文本
+         */
         private String buildEnrichedUserPrompt(String message, String category) {
                 String prompt = Objects.requireNonNullElse(message, "");
 
@@ -103,6 +144,14 @@ public class AiShoppingGuideApp {
                 return sb.toString();
         }
 
+        /**
+         * 将检索到的 Document 列表渲染为提示词中的“参考资料”部分。
+         * <p>
+         * 每个片段会附带基础定位信息（source/chunk_index），并用分隔线隔开，便于模型引用与归纳。
+         *
+         * @param docs 检索结果
+         * @return 适合直接拼入 prompt 的文本
+         */
         private static String renderDocsForPrompt(List<Document> docs) {
                 if (docs == null || docs.isEmpty()) {
                         return "（未检索到直接相关资料）";
@@ -123,6 +172,11 @@ public class AiShoppingGuideApp {
                 return String.join(System.lineSeparator() + "-----" + System.lineSeparator(), chunks);
         }
 
+        /**
+         * 根据用户问题文本做简单规则判断，推断可能的业务分类（用于分区 RAG 检索）。
+         * <p>
+         * 返回 null 表示不进行分类过滤（走全量知识库检索）。
+         */
         private static String inferBizCategoryFromPrompt(String prompt) {
                 if (prompt == null || prompt.isBlank()) {
                         return null;
@@ -144,10 +198,25 @@ public class AiShoppingGuideApp {
                 return null;
         }
 
+        /**
+         * 结构化导购报告：用于将模型输出映射为强类型对象，便于前端/接口直接消费。
+         *
+         * @param title      报告标题
+         * @param suggesions 建议列表（字段名保持与现有提示词/映射一致）
+         */
         public record ShoppingReport(String title, List<String> suggesions) {
 
         }
 
+        /**
+         * 发起一次对话并让模型以 {@link ShoppingReport} 的结构化格式返回。
+         * <p>
+         * 会根据用户问题自动推断业务分类做分区检索（未命中则回退到全库检索），并把结果拼入增强提示词。
+         *
+         * @param message 用户问题
+         * @param chatId  会话 ID（为空时使用 default）
+         * @return 结构化的导购建议报告
+         */
         public ShoppingReport doChatWithReport(String message, String chatId) {
                 String dynamicSystem = new SystemPromptTemplate(systemResource)
                                 .createMessage(Map.of("current_date", LocalDate.now().toString()))

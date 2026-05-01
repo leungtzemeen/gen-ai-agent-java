@@ -25,6 +25,7 @@ import org.springframework.ai.vectorstore.VectorStore;
 import org.springframework.ai.vectorstore.filter.Filter;
 import org.springframework.ai.vectorstore.filter.FilterExpressionBuilder;
 import org.springframework.core.io.PathResource;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.util.DigestUtils;
 
@@ -41,6 +42,22 @@ public class RagDataService {
     private final VectorStore vectorStore;
     private final StorageProperties storageProperties;
 
+    /**
+     * RAG 相似度阈值（越大越严格）。
+     * <p>
+     * 可通过 yml 配置 {@code app.rag.similarity-threshold} 覆盖，默认 0.5。
+     */
+    @Value("${app.rag.similarity-threshold:0.5}")
+    private double similarityThreshold;
+
+    /**
+     * 从配置的知识库目录（{@code app.storage.rag-docs}）批量导入 Markdown 文档到向量库。
+     * <p>
+     * 处理流程：遍历目录下所有 {@code .md} 文件 → 计算文件哈希做增量去重 → 删除同名旧数据 → 切片（含 overlap）
+     * → 补充业务元数据 → 向量化写入 {@link VectorStore}。
+     * <p>
+     * 无论中途是否有文件失败，都会在结束时尝试持久化索引（仅对 {@link SimpleVectorStore} 生效）。
+     */
     public void importDocs() {
         String ragDocsDir = storageProperties.getRagDocs();
         if (ragDocsDir == null || ragDocsDir.isBlank()) {
@@ -73,6 +90,12 @@ public class RagDataService {
         }
     }
 
+    /**
+     * 清理已导入的向量数据。
+     * <p>
+     * - 当使用 {@link SimpleVectorStore} 时，删除本地持久化的 JSON 索引文件（相当于清空）。<br>
+     * - 其他 VectorStore 实现通常需要按 ID 或 filter 删除，这里只做提示不做强行清空。
+     */
     public void deleteDocs() {
         if (vectorStore instanceof SimpleVectorStore) {
             deleteSimpleVectorStoreFiles();
@@ -84,6 +107,12 @@ public class RagDataService {
                 vectorStore.getClass().getName());
     }
 
+    /**
+     * 将 {@link SimpleVectorStore} 的内存索引持久化到本地文件（{@code app.storage.vector-db}）。
+     * <p>
+     * 如果当前 VectorStore 不是 SimpleVectorStore，则直接忽略（因为不一定支持 save）。
+     * 持久化失败不会中断导入流程，只会打印错误日志。
+     */
     private void saveIndex() {
         if (!(vectorStore instanceof SimpleVectorStore simpleVectorStore)) {
             return;
@@ -110,6 +139,11 @@ public class RagDataService {
         }
     }
 
+    /**
+     * 删除 {@link SimpleVectorStore} 的本地持久化文件（{@code app.storage.vector-db} 指向的文件或目录下的 *.json）。
+     * <p>
+     * 用于“清空”本地向量库；若路径是目录，会删除目录下所有 JSON 文件。
+     */
     private void deleteSimpleVectorStoreFiles() {
         String vectorDb = storageProperties.getVectorDb();
         if (vectorDb == null || vectorDb.isBlank()) {
@@ -143,6 +177,14 @@ public class RagDataService {
         }
     }
 
+    /**
+     * 对单个 Markdown 文件执行增量导入。
+     * <p>
+     * - 计算 MD5 并基于 metadata(source + file_hash) 判断是否已入库，未变更则跳过<br>
+     * - 若变更：先删除同名旧数据，再切片/加 overlap/补业务元数据后写入向量库
+     * <p>
+     * 任何异常都会被捕获并记录日志，避免影响后续文件导入。
+     */
     private void processSingleFileIncrementally(Path path, TokenTextSplitter splitter) {
         String filename = path.getFileName().toString();
 
@@ -187,6 +229,11 @@ public class RagDataService {
         docs.forEach(doc -> doc.getMetadata().putAll(enhancements));
     }
 
+    /**
+     * 根据文件名推断业务分类（写入 metadata 的 {@code biz_category}），用于后续按分类检索过滤。
+     * <p>
+     * 当前规则为硬编码关键字匹配，未命中时返回“未分类”。
+     */
     private static String inferBizCategoryFromFilename(String filename) {
         String name = filename == null ? "" : filename.toLowerCase();
         if (name.contains("audio-visual")) {
@@ -201,6 +248,11 @@ public class RagDataService {
         return "未分类";
     }
 
+    /**
+     * 判断向量库中是否已存在“同一来源文件 + 同一文件哈希”的记录，用于增量去重。
+     * <p>
+     * 通过 metadata 过滤：{@code source == filename AND file_hash == fileHash}，只取 1 条命中即可。
+     */
     private boolean hasSameSourceAndHash(String filename, String fileHash) {
         FilterExpressionBuilder b = new FilterExpressionBuilder();
         Filter.Expression exp = b.and(
@@ -218,6 +270,11 @@ public class RagDataService {
         return matches != null && !matches.isEmpty();
     }
 
+    /**
+     * 删除指定来源文件（metadata 的 {@code source}）对应的全部切片数据。
+     * <p>
+     * 用于文件更新时先清理旧版本，再写入新版本。
+     */
     private void deleteBySource(String filename) {
         FilterExpressionBuilder b = new FilterExpressionBuilder();
         Filter.Expression exp = b.eq("source", filename).build();
@@ -231,25 +288,44 @@ public class RagDataService {
         log.info(">>>> [RAG-Search] 正在执行分区检索，分类：{}。", bizCategory);
         FilterExpressionBuilder b = new FilterExpressionBuilder();
         Filter.Expression exp = b.eq("biz_category", bizCategory).build();
-        return vectorStore.similaritySearch(SearchRequest.builder()
+        List<Document> results = vectorStore.similaritySearch(SearchRequest.builder()
                 .query(Objects.requireNonNull(query))
                 .topK(5)
-                .similarityThresholdAll()
+                .similarityThreshold(similarityThreshold)
                 .filterExpression(Objects.requireNonNull(exp))
                 .build());
+        logNoResultsIfEmpty(results);
+        return results;
     }
 
     /**
      * 普通检索：不使用 metadata 过滤器。
      */
     public List<Document> similaritySearch(String query) {
-        return vectorStore.similaritySearch(SearchRequest.builder()
+        List<Document> results = vectorStore.similaritySearch(SearchRequest.builder()
                 .query(Objects.requireNonNull(query))
                 .topK(5)
-                .similarityThresholdAll()
+                .similarityThreshold(similarityThreshold)
                 .build());
+        logNoResultsIfEmpty(results);
+        return results;
     }
 
+    private void logNoResultsIfEmpty(List<Document> results) {
+        if (results != null && !results.isEmpty()) {
+            return;
+        }
+        // 按你的要求：阈值为 0.5 时输出固定文案，便于检索与对齐。
+        if (Double.compare(similarityThreshold, 0.5d) == 0) {
+            log.info(">>>> [RAG-Search] 未找到相似度大于 0.5 的知识片段。");
+        } else {
+            log.info(">>>> [RAG-Search] 未找到相似度大于 {} 的知识片段。", similarityThreshold);
+        }
+    }
+
+    /**
+     * 计算文件内容的 MD5（十六进制字符串），用于增量导入时判断文件是否变更。
+     */
     private static String computeMd5(Path path) {
         try (InputStream in = Files.newInputStream(path)) {
             return DigestUtils.md5DigestAsHex(Objects.requireNonNull(in));
@@ -258,6 +334,11 @@ public class RagDataService {
         }
     }
 
+    /**
+     * 读取 Markdown 文件为 {@link Document}，并用 {@link TokenTextSplitter} 切片。
+     * <p>
+     * 会把 {@code source} 与 {@code file_hash} 写入 Document metadata，供去重/删除/过滤检索使用。
+     */
     private static List<Document> split(Path path, String filename, String fileHash, TokenTextSplitter splitter) {
         // String filePath = path.toAbsolutePath().toString();
         // Path resourcePath = Objects.requireNonNull(Path.of(Objects.requireNonNull(filePath)));
@@ -310,6 +391,11 @@ public class RagDataService {
         return out;
     }
 
+    /**
+     * 从上一段文本末尾提取 N 个“词”（按空白分割）作为 overlap。
+     * <p>
+     * 对无空格文本（如纯中文）做兜底：取末尾 N 个字符。
+     */
     private static String tailTerms(String text, int terms) {
         String trimmed = text.trim();
         if (trimmed.isEmpty()) {
