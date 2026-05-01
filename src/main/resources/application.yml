@@ -39,3 +39,5 @@ app:
     # RAG相似度阈值
   rag:
     similarity-threshold: 0.5
+  security:
+    shadow-words-base64: # 影子词库

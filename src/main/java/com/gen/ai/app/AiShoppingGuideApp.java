@@ -17,7 +17,9 @@ import org.springframework.core.io.Resource;
 import org.springframework.stereotype.Component;
 
 import com.gen.ai.advisor.AppLoggerAdvisor;
+import com.gen.ai.exception.SensitivePromptException;
 import com.gen.ai.service.RagDataService;
+import com.gen.ai.service.SensitiveWordService;
 
 import lombok.extern.slf4j.Slf4j;
 
@@ -35,6 +37,7 @@ public class AiShoppingGuideApp {
 
         private final Resource systemResource;
         private final RagDataService ragDataService;
+        private final SensitiveWordService sensitiveWordService;
 
         /**
          * 构建导购应用实例，并基于自动装配的 {@link ChatClient.Builder} 初始化 {@link ChatClient}。
@@ -47,9 +50,11 @@ public class AiShoppingGuideApp {
                         ChatClient.Builder chatClientBuilder,
                         ChatMemory chatMemory,
                         RagDataService ragDataService,
+                        SensitiveWordService sensitiveWordService,
                         @Value("classpath:/prompts/assistant-guide.st") Resource systemResource) {
                 this.systemResource = systemResource;
                 this.ragDataService = ragDataService;
+                this.sensitiveWordService = sensitiveWordService;
                 // 使用 Spring Boot 自动装配的 Builder，确保 Functions 等能力可通过名称解析并生效
                 this.chatClient = chatClientBuilder
                                 .defaultAdvisors(
@@ -82,6 +87,11 @@ public class AiShoppingGuideApp {
          * @return 模型输出的文本内容（可能为空字符串）
          */
         public String doChat(String message, String chatId, String category) {
+                if (sensitiveWordService.containsSensitiveWord(message)) {
+                        log.warn(">>>> [Security] 检测到敏感提问，已在本地拦截");
+                        throw new SensitivePromptException();
+                }
+
                 String dynamicSystem = new SystemPromptTemplate(systemResource)
                                 .createMessage(Map.of("current_date", LocalDate.now().toString()))
                                 .getText();
@@ -218,6 +228,11 @@ public class AiShoppingGuideApp {
          * @return 结构化的导购建议报告
          */
         public ShoppingReport doChatWithReport(String message, String chatId) {
+                if (sensitiveWordService.containsSensitiveWord(message)) {
+                        log.warn(">>>> [Security] 检测到敏感提问，已在本地拦截");
+                        throw new SensitivePromptException();
+                }
+
                 String dynamicSystem = new SystemPromptTemplate(systemResource)
                                 .createMessage(Map.of("current_date", LocalDate.now().toString()))
                                 .getText();

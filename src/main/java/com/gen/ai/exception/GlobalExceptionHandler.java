@@ -15,6 +15,13 @@ public class GlobalExceptionHandler {
 
     private static final String FRIENDLY_REFUSAL = "哎呀，WiseLink 现在的注意力都在导购上呢，这个话题咱们暂时不聊哦，换个宝贝问问吧？";
 
+    @ExceptionHandler(SensitivePromptException.class)
+    public ResponseEntity<String> handleSensitivePromptException(SensitivePromptException ex) {
+        // 统一保持温柔拒绝口径，避免把具体命中内容返回给用户
+        log.warn(">>>> [Security] 检测到敏感提问，已在本地拦截");
+        return ResponseEntity.ok(FRIENDLY_REFUSAL);
+    }
+
     @ExceptionHandler(RuntimeException.class)
     public ResponseEntity<String> handleRuntimeException(RuntimeException ex) {
         if (isDashScopeSensitiveInspectionFailed(ex)) {

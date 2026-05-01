@@ -22,7 +22,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 
 @Configuration
-@EnableConfigurationProperties(StorageProperties.class)
+@EnableConfigurationProperties({ StorageProperties.class, AppSecurityProperties.class })
 @RequiredArgsConstructor
 @Slf4j
 public class StorageConfig {
