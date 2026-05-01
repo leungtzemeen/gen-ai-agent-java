@@ -6,6 +6,8 @@ import java.io.InputStream;
 import java.nio.file.DirectoryStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.time.OffsetDateTime;
+import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -156,12 +158,47 @@ public class RagDataService {
             deleteBySource(filename);
 
             List<Document> splitDocuments = applyOverlap(split(path, filename, currentHash, splitter), 50);
+            enhanceBusinessMetadata(splitDocuments, filename);
             log.info("正在向量化文件：{}", filename);
             vectorStore.accept(splitDocuments);
             log.info("成功存入 {} 个知识切片", splitDocuments.size());
         } catch (Exception e) {
             log.error(">>>> [RAG-ETL] 导入文件失败（已跳过）：{}", filename, e);
         }
+    }
+
+    /**
+     * 业务增强：在保留 Spring AI 自动元数据（如 title, chunk_index 等）的前提下，
+     * 注入业务分类与入库时间，用于后续向量检索的 metadata 过滤。
+     */
+    private static void enhanceBusinessMetadata(List<Document> docs, String filename) {
+        if (docs == null || docs.isEmpty()) {
+            return;
+        }
+
+        String bizCategory = inferBizCategoryFromFilename(filename);
+        String createdAt = OffsetDateTime.now().format(DateTimeFormatter.ISO_OFFSET_DATE_TIME);
+
+        Map<String, Object> enhancements = new HashMap<>();
+        enhancements.put("biz_category", bizCategory);
+        enhancements.put("created_at", createdAt);
+
+        // 保护原有元数据：保留 title, chunk_index 等，只添加/覆盖我们的字段
+        docs.forEach(doc -> doc.getMetadata().putAll(enhancements));
+    }
+
+    private static String inferBizCategoryFromFilename(String filename) {
+        String name = filename == null ? "" : filename.toLowerCase();
+        if (name.contains("audio-visual")) {
+            return "影音导购";
+        }
+        if (name.contains("cleaning")) {
+            return "家电清洗";
+        }
+        if (name.contains("health")) {
+            return "运动健康";
+        }
+        return "未分类";
     }
 
     private boolean hasSameSourceAndHash(String filename, String fileHash) {
@@ -185,6 +222,32 @@ public class RagDataService {
         FilterExpressionBuilder b = new FilterExpressionBuilder();
         Filter.Expression exp = b.eq("source", filename).build();
         vectorStore.delete(Objects.requireNonNull(exp));
+    }
+
+    /**
+     * 分区检索：按业务分类（biz_category）过滤后做相似度检索。
+     */
+    public List<Document> similaritySearch(String query, String bizCategory) {
+        log.info(">>>> [RAG-Search] 正在执行分区检索，分类：{}。", bizCategory);
+        FilterExpressionBuilder b = new FilterExpressionBuilder();
+        Filter.Expression exp = b.eq("biz_category", bizCategory).build();
+        return vectorStore.similaritySearch(SearchRequest.builder()
+                .query(Objects.requireNonNull(query))
+                .topK(5)
+                .similarityThresholdAll()
+                .filterExpression(Objects.requireNonNull(exp))
+                .build());
+    }
+
+    /**
+     * 普通检索：不使用 metadata 过滤器。
+     */
+    public List<Document> similaritySearch(String query) {
+        return vectorStore.similaritySearch(SearchRequest.builder()
+                .query(Objects.requireNonNull(query))
+                .topK(5)
+                .similarityThresholdAll()
+                .build());
     }
 
     private static String computeMd5(Path path) {
