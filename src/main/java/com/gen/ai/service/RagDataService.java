@@ -10,11 +10,14 @@ import java.time.OffsetDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.concurrent.CompletableFuture;
 import java.util.stream.Stream;
 
+import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.document.Document;
 import org.springframework.ai.reader.markdown.MarkdownDocumentReader;
 import org.springframework.ai.reader.markdown.config.MarkdownDocumentReaderConfig;
@@ -31,16 +34,24 @@ import org.springframework.util.DigestUtils;
 
 import com.gen.ai.config.StorageProperties;
 
-import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 
 @Service
-@RequiredArgsConstructor
 @Slf4j
 public class RagDataService {
 
     private final VectorStore vectorStore;
     private final StorageProperties storageProperties;
+    private final ChatClient chatClient;
+
+    public RagDataService(
+            VectorStore vectorStore,
+            StorageProperties storageProperties,
+            ChatClient.Builder chatClientBuilder) {
+        this.vectorStore = Objects.requireNonNull(vectorStore);
+        this.storageProperties = Objects.requireNonNull(storageProperties);
+        this.chatClient = Objects.requireNonNull(chatClientBuilder, "chatClientBuilder").build();
+    }
 
     /**
      * RAG 相似度阈值（越大越严格）。
@@ -283,32 +294,131 @@ public class RagDataService {
 
     /**
      * 分区检索：按业务分类（biz_category）过滤后做相似度检索。
+     * <p>
+     * WiseLink 分身检索：先用 {@link ChatClient} 将用户问题改写为 3 条检索词，并行检索后按文档 ID 去重合并。
      */
     public List<Document> similaritySearch(String query, String bizCategory) {
-        log.info(">>>> [RAG-Search] 正在执行分区检索，分类：{}。", bizCategory);
+        log.info(">>>> [RAG-Search] 正在执行分区检索（WiseLink 分身检索），分类：{}。", bizCategory);
         FilterExpressionBuilder b = new FilterExpressionBuilder();
         Filter.Expression exp = b.eq("biz_category", bizCategory).build();
-        List<Document> results = vectorStore.similaritySearch(SearchRequest.builder()
-                .query(Objects.requireNonNull(query))
-                .topK(5)
-                .similarityThreshold(similarityThreshold)
-                .filterExpression(Objects.requireNonNull(exp))
-                .build());
+        List<Document> results = multiQuerySimilaritySearch(Objects.requireNonNull(query), exp);
         logNoResultsIfEmpty(results);
         return results;
     }
 
     /**
      * 普通检索：不使用 metadata 过滤器。
+     * <p>
+     * 同样走 WiseLink 分身检索流程（3 路并行 + 去重）。
      */
     public List<Document> similaritySearch(String query) {
-        List<Document> results = vectorStore.similaritySearch(SearchRequest.builder()
-                .query(Objects.requireNonNull(query))
-                .topK(5)
-                .similarityThreshold(similarityThreshold)
-                .build());
+        List<Document> results = multiQuerySimilaritySearch(Objects.requireNonNull(query), null);
         logNoResultsIfEmpty(results);
         return results;
+    }
+
+    /**
+     * MultiQueryExpander：调用大模型将用户 query 改写为 3 条语义相关、表述不同的短检索词，再并行做向量检索并去重。
+     */
+    private List<Document> multiQuerySimilaritySearch(String query, Filter.Expression filterExpression) {
+        List<String> variants = multiQueryExpand(query);
+        if (variants.size() == 1) {
+            return executeSimilaritySearch(variants.getFirst(), filterExpression);
+        }
+
+        List<CompletableFuture<List<Document>>> futureList = variants.stream()
+                .map(q -> CompletableFuture.supplyAsync(() -> executeSimilaritySearch(q, filterExpression)))
+                .toList();
+        CompletableFuture.allOf(futureList.toArray(CompletableFuture<?>[]::new)).join();
+
+        List<Document> merged = new ArrayList<>();
+        for (CompletableFuture<List<Document>> f : futureList) {
+            List<Document> batch = f.join();
+            if (batch != null) {
+                merged.addAll(batch);
+            }
+        }
+        return dedupeDocumentsById(merged);
+    }
+
+    private List<Document> executeSimilaritySearch(String q, Filter.Expression filterExpression) {
+        SearchRequest.Builder b = SearchRequest.builder()
+                .query(Objects.requireNonNullElse(q, ""))
+                .topK(5)
+                .similarityThreshold(similarityThreshold);
+        if (filterExpression != null) {
+            b.filterExpression(filterExpression);
+        }
+        return vectorStore.similaritySearch(b.build());
+    }
+
+    /**
+     * 使用 ChatClient 生成 3 条分身检索词；失败或解析异常时回退为仅使用原始 query。
+     */
+    private List<String> multiQueryExpand(String userQuery) {
+        String q = userQuery == null ? "" : userQuery.strip();
+        if (q.isEmpty()) {
+            return List.of("");
+        }
+        try {
+            String systemPrompt = """
+                    你是电商导购场景的查询改写助手。根据用户输入生成 3 条语义相关但角度不同的短检索查询（每条不超过 24 个字），用于向量库召回。
+                    严格只输出 3 行文本：每行一条查询，不要序号、不要解释、不要空行、不要引号。""";
+            String raw = chatClient.prompt()
+                    .system(systemPrompt)
+                    .user("用户问题：\n" + q)
+                    .call()
+                    .content();
+            List<String> lines = normalizeExpandedLines(raw);
+            while (lines.size() < 3) {
+                lines.add(q);
+            }
+            List<String> three = List.of(lines.get(0), lines.get(1), lines.get(2));
+            log.info(
+                    ">>>> [RAG-Search][WiseLink-分身] AI 改写检索词：① {} ② {} ③ {}",
+                    three.get(0),
+                    three.get(1),
+                    three.get(2));
+            return three;
+        } catch (Exception e) {
+            log.warn(">>>> [RAG-Search][WiseLink-分身] 查询改写失败，回退为原始查询。原因：{}", e.toString());
+            return List.of(q);
+        }
+    }
+
+    private static List<String> normalizeExpandedLines(String raw) {
+        List<String> out = new ArrayList<>();
+        if (raw == null || raw.isBlank()) {
+            return out;
+        }
+        for (String line : raw.split("\\R")) {
+            String t = line.strip();
+            if (t.isEmpty()) {
+                continue;
+            }
+            t = t.replaceFirst("^\\d+[\\.、:：\\)]\\s*", "");
+            t = t.replaceFirst("^[-*]\\s+", "");
+            if ((t.startsWith("\"") && t.endsWith("\"")) || (t.startsWith("「") && t.endsWith("」"))) {
+                t = t.substring(1, t.length() - 1).strip();
+            }
+            if (!t.isEmpty()) {
+                out.add(t);
+            }
+        }
+        return out;
+    }
+
+    private static List<Document> dedupeDocumentsById(List<Document> documents) {
+        Map<String, Document> byId = new LinkedHashMap<>();
+        for (Document doc : documents) {
+            if (doc == null) {
+                continue;
+            }
+            String id = doc.getId();
+            String key = id != null && !id.isBlank() ? id : "noid-" + System.identityHashCode(doc);
+            byId.putIfAbsent(key, doc);
+        }
+        return new ArrayList<>(byId.values());
     }
 
     private void logNoResultsIfEmpty(List<Document> results) {

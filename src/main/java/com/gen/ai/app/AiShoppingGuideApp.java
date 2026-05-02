@@ -16,6 +16,8 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.core.io.Resource;
 import org.springframework.stereotype.Component;
 
+import jakarta.annotation.PostConstruct;
+
 import com.gen.ai.advisor.AppLoggerAdvisor;
 import com.gen.ai.exception.SensitivePromptException;
 import com.gen.ai.service.RagDataService;
@@ -33,9 +35,16 @@ import lombok.extern.slf4j.Slf4j;
  */
 public class AiShoppingGuideApp {
 
+        /**
+         * 与 {@code assistant-guide.st} 中 {@code {current_date}} 占位符对应的模板变量名。
+         */
+        private static final String ASSISTANT_GUIDE_VAR_CURRENT_DATE = "current_date";
+
         private final ChatClient chatClient;
 
-        private final Resource systemResource;
+        @Value("classpath:prompts/assistant-guide.st")
+        private Resource systemResource;
+
         private final RagDataService ragDataService;
         private final SensitiveWordService sensitiveWordService;
 
@@ -44,15 +53,13 @@ public class AiShoppingGuideApp {
          * <p>
          * - 使用 {@link MessageChatMemoryAdvisor} 将 {@link ChatMemory} 挂到对话链路中（按 conversationId 区分会话）<br>
          * - 使用 {@link AppLoggerAdvisor} 打印请求/响应关键日志<br>
-         * - 注入系统提示词模板资源（{@code classpath:/prompts/assistant-guide.st}）
+         * - 金牌导购人设模板见 {@code classpath:prompts/assistant-guide.st}（字段 {@link #systemResource}）
          */
         public AiShoppingGuideApp(
                         ChatClient.Builder chatClientBuilder,
                         ChatMemory chatMemory,
                         RagDataService ragDataService,
-                        SensitiveWordService sensitiveWordService,
-                        @Value("classpath:/prompts/assistant-guide.st") Resource systemResource) {
-                this.systemResource = systemResource;
+                        SensitiveWordService sensitiveWordService) {
                 this.ragDataService = ragDataService;
                 this.sensitiveWordService = sensitiveWordService;
                 // 使用 Spring Boot 自动装配的 Builder，确保 Functions 等能力可通过名称解析并生效
@@ -61,6 +68,11 @@ public class AiShoppingGuideApp {
                                                 MessageChatMemoryAdvisor.builder(Objects.requireNonNull(chatMemory)).build(),
                                                 new AppLoggerAdvisor())
                                 .build();
+        }
+
+        @PostConstruct
+        void logWiseLinkPersonaLoaded() {
+                log.info(">>>> [System] WiseLink 金牌导购人设加载成功。");
         }
 
         /**
@@ -79,7 +91,7 @@ public class AiShoppingGuideApp {
         /**
          * 发起一次对话并返回文本结果，可选按业务分类过滤 RAG 检索范围。
          * <p>
-         * 主要步骤：渲染系统提示词模板（带 current_date）→ 拼装 RAG 参考资料与用户问题 → 调用模型并允许使用商品工具函数。
+         * 主要步骤：仅通过 {@code assistant-guide.st} 渲染系统提示词（仅注入 {@code current_date}）→ 拼装 RAG 与用户侧增强提示 → 调用模型并允许使用商品工具函数。
          *
          * @param message  用户问题
          * @param chatId   会话 ID（为空时使用 default）
@@ -92,22 +104,13 @@ public class AiShoppingGuideApp {
                         throw new SensitivePromptException();
                 }
 
-                String dynamicSystem = new SystemPromptTemplate(systemResource)
-                                .createMessage(Map.of("current_date", LocalDate.now().toString()))
-                                .getText();
-                dynamicSystem = dynamicSystem
-                                + System.lineSeparator()
-                                + "当你需要查询商品具体的实时价格或库存时，请务必使用工具进行查询，不要凭空猜测。"
-                                + "如果知识库（RAG）里没有实时价格或库存信息，必须调用工具获取。"
-                                + System.lineSeparator()
-                                + "你搜到的参考资料可能包含断断续续的编号或参数，请将其整理成自然、亲切的导购语言，不要直接复读原文。"
-                                + "如果资料中没有直接回答用户的问题，请基于现有知识给出专业建议或引导。";
+                String systemMessage = renderAssistantGuideSystemPrompt();
 
                 String enrichedUserPrompt = buildEnrichedUserPrompt(message, category);
                 String conversationId = (chatId == null || chatId.isBlank()) ? "default" : chatId;
                 ChatResponse response = chatClient
                                 .prompt()
-                                .system(dynamicSystem)
+                                .system(systemMessage)
                                 .user(Objects.requireNonNull(enrichedUserPrompt))
                                 .toolNames("getProductPriceFunction", "getProductStockFunction")
                                 .advisors(spec -> spec.param(ChatMemory.CONVERSATION_ID, (Object) conversationId))
@@ -121,9 +124,27 @@ public class AiShoppingGuideApp {
         }
 
         /**
+         * 从 {@link #systemResource}（{@code prompts/assistant-guide.st}）渲染系统提示词，仅注入 {@link #ASSISTANT_GUIDE_VAR_CURRENT_DATE}。
+         * {@link #doChat(String, String, String)} 的系统消息必须且仅能来自此方法，不得另行拼接系统人设文案。
+         */
+        private String renderAssistantGuideSystemPrompt() {
+                Resource resource = Objects.requireNonNull(systemResource, "systemResource");
+                String today = LocalDate.now().toString();
+                String rendered = new SystemPromptTemplate(resource)
+                                .createMessage(Map.of(ASSISTANT_GUIDE_VAR_CURRENT_DATE, today))
+                                .getText();
+                if (rendered != null && rendered.contains("{current_date}")) {
+                        log.warn(
+                                        ">>>> [System] assistant-guide.st 中的日期占位符未被替换，请确认模板变量名为：{}",
+                                        ASSISTANT_GUIDE_VAR_CURRENT_DATE);
+                }
+                return Objects.requireNonNullElse(rendered, "");
+        }
+
+        /**
          * 将“用户问题 + RAG 检索结果”拼装为对模型更友好的输入提示词。
          * <p>
-         * 内容包含：检索范围说明、参考资料（多个切片）、以及最终的用户问题。
+         * 内容包含：检索范围说明、参考资料（多个切片）、【重要执行指令】（紧邻用户问题之上）、以及最终的用户问题。
          *
          * @param message  用户问题
          * @param category 业务分类（不为空时会进行分区检索过滤）
@@ -149,6 +170,7 @@ public class AiShoppingGuideApp {
 
                 sb.append("【参考资料】").append(System.lineSeparator());
                 sb.append(renderDocsForPrompt(docs));
+                sb.append(System.lineSeparator());
                 sb.append(System.lineSeparator());
                 sb.append("【用户问题】").append(prompt);
                 return sb.toString();
@@ -233,10 +255,8 @@ public class AiShoppingGuideApp {
                         throw new SensitivePromptException();
                 }
 
-                String dynamicSystem = new SystemPromptTemplate(systemResource)
-                                .createMessage(Map.of("current_date", LocalDate.now().toString()))
-                                .getText();
-                dynamicSystem = dynamicSystem + "每次对话都要生成购物建议报告, 标题为{用户名}的购物建议报告, 内容为建议列表";
+                String dynamicSystem = renderAssistantGuideSystemPrompt()
+                                + "每次对话都要生成购物建议报告, 标题为{用户名}的购物建议报告, 内容为建议列表";
 
                 String bizCategory = inferBizCategoryFromPrompt(message);
                 String enrichedUserPrompt = buildEnrichedUserPrompt(message, bizCategory);
