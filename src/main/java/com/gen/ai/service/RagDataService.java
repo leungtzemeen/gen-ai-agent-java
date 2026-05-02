@@ -17,8 +17,9 @@ import java.util.Objects;
 import java.util.concurrent.CompletableFuture;
 import java.util.stream.Stream;
 
-import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.document.Document;
+import org.springframework.ai.rag.Query;
+import org.springframework.ai.rag.preretrieval.query.expansion.QueryExpander;
 import org.springframework.ai.reader.markdown.MarkdownDocumentReader;
 import org.springframework.ai.reader.markdown.config.MarkdownDocumentReaderConfig;
 import org.springframework.ai.transformer.splitter.TokenTextSplitter;
@@ -33,6 +34,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.util.DigestUtils;
 
 import com.gen.ai.config.StorageProperties;
+import com.gen.ai.rag.WiseLinkMultiQueryExpander;
 
 import lombok.extern.slf4j.Slf4j;
 
@@ -42,15 +44,15 @@ public class RagDataService {
 
     private final VectorStore vectorStore;
     private final StorageProperties storageProperties;
-    private final ChatClient chatClient;
+    private final QueryExpander wiseLinkMultiQueryExpander;
 
     public RagDataService(
             VectorStore vectorStore,
             StorageProperties storageProperties,
-            ChatClient.Builder chatClientBuilder) {
+            WiseLinkMultiQueryExpander wiseLinkMultiQueryExpander) {
         this.vectorStore = Objects.requireNonNull(vectorStore);
         this.storageProperties = Objects.requireNonNull(storageProperties);
-        this.chatClient = Objects.requireNonNull(chatClientBuilder, "chatClientBuilder").build();
+        this.wiseLinkMultiQueryExpander = Objects.requireNonNull(wiseLinkMultiQueryExpander);
     }
 
     /**
@@ -295,7 +297,7 @@ public class RagDataService {
     /**
      * 分区检索：按业务分类（biz_category）过滤后做相似度检索。
      * <p>
-     * WiseLink 分身检索：先用 {@link ChatClient} 将用户问题改写为 3 条检索词，并行检索后按文档 ID 去重合并。
+     * WiseLink 分身检索：通过 {@link WiseLinkMultiQueryExpander} 将用户问题改写为多路检索词，并行检索后按文档 ID 去重合并。
      */
     public List<Document> similaritySearch(String query, String bizCategory) {
         log.info(">>>> [RAG-Search] 正在执行分区检索（WiseLink 分身检索），分类：{}。", bizCategory);
@@ -318,16 +320,21 @@ public class RagDataService {
     }
 
     /**
-     * MultiQueryExpander：调用大模型将用户 query 改写为 3 条语义相关、表述不同的短检索词，再并行做向量检索并去重。
+     * MultiQueryExpander（WiseLink 分身检索）：将 query 扩展为多路检索词，并行做向量检索并去重。
      */
     private List<Document> multiQuerySimilaritySearch(String query, Filter.Expression filterExpression) {
-        List<String> variants = multiQueryExpand(query);
-        if (variants.size() == 1) {
-            return executeSimilaritySearch(variants.getFirst(), filterExpression);
+        Query base = Query.builder()
+                .text(Objects.requireNonNullElse(query, ""))
+                .history(List.of())
+                .context(Map.of())
+                .build();
+        List<Query> expanded = wiseLinkMultiQueryExpander.expand(base);
+        if (expanded.size() == 1) {
+            return executeSimilaritySearch(expanded.getFirst().text(), filterExpression);
         }
 
-        List<CompletableFuture<List<Document>>> futureList = variants.stream()
-                .map(q -> CompletableFuture.supplyAsync(() -> executeSimilaritySearch(q, filterExpression)))
+        List<CompletableFuture<List<Document>>> futureList = expanded.stream()
+                .map(q -> CompletableFuture.supplyAsync(() -> executeSimilaritySearch(q.text(), filterExpression)))
                 .toList();
         CompletableFuture.allOf(futureList.toArray(CompletableFuture<?>[]::new)).join();
 
@@ -350,62 +357,6 @@ public class RagDataService {
             b.filterExpression(filterExpression);
         }
         return vectorStore.similaritySearch(b.build());
-    }
-
-    /**
-     * 使用 ChatClient 生成 3 条分身检索词；失败或解析异常时回退为仅使用原始 query。
-     */
-    private List<String> multiQueryExpand(String userQuery) {
-        String q = userQuery == null ? "" : userQuery.strip();
-        if (q.isEmpty()) {
-            return List.of("");
-        }
-        try {
-            String systemPrompt = """
-                    你是电商导购场景的查询改写助手。根据用户输入生成 3 条语义相关但角度不同的短检索查询（每条不超过 24 个字），用于向量库召回。
-                    严格只输出 3 行文本：每行一条查询，不要序号、不要解释、不要空行、不要引号。""";
-            String raw = chatClient.prompt()
-                    .system(systemPrompt)
-                    .user("用户问题：\n" + q)
-                    .call()
-                    .content();
-            List<String> lines = normalizeExpandedLines(raw);
-            while (lines.size() < 3) {
-                lines.add(q);
-            }
-            List<String> three = List.of(lines.get(0), lines.get(1), lines.get(2));
-            log.info(
-                    ">>>> [RAG-Search][WiseLink-分身] AI 改写检索词：① {} ② {} ③ {}",
-                    three.get(0),
-                    three.get(1),
-                    three.get(2));
-            return three;
-        } catch (Exception e) {
-            log.warn(">>>> [RAG-Search][WiseLink-分身] 查询改写失败，回退为原始查询。原因：{}", e.toString());
-            return List.of(q);
-        }
-    }
-
-    private static List<String> normalizeExpandedLines(String raw) {
-        List<String> out = new ArrayList<>();
-        if (raw == null || raw.isBlank()) {
-            return out;
-        }
-        for (String line : raw.split("\\R")) {
-            String t = line.strip();
-            if (t.isEmpty()) {
-                continue;
-            }
-            t = t.replaceFirst("^\\d+[\\.、:：\\)]\\s*", "");
-            t = t.replaceFirst("^[-*]\\s+", "");
-            if ((t.startsWith("\"") && t.endsWith("\"")) || (t.startsWith("「") && t.endsWith("」"))) {
-                t = t.substring(1, t.length() - 1).strip();
-            }
-            if (!t.isEmpty()) {
-                out.add(t);
-            }
-        }
-        return out;
     }
 
     private static List<Document> dedupeDocumentsById(List<Document> documents) {
