@@ -19,6 +19,9 @@ import com.gen.ai.prompt.AssistantGuidePromptBundle;
 import com.gen.ai.rag.ShortCircuitCompressionQueryTransformer;
 import com.gen.ai.rag.WiseLinkMultiQueryExpander;
 
+/**
+ * WiseLink Modular RAG：装配 {@link RetrievalAugmentationAdvisor}（压缩改写 → 分身扩展 → 向量检索 → 上下文注入）及人设模板 {@link AssistantGuidePromptBundle}。
+ */
 @Configuration
 public class WiseLinkRagAdvisorConfig {
 

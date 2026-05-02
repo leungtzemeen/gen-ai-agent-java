@@ -8,6 +8,9 @@ import org.springframework.ai.chat.client.advisor.api.AdvisorChain;
 import org.springframework.ai.chat.client.advisor.api.BaseAdvisor;
 import org.springframework.ai.chat.prompt.PromptTemplate;
 
+/**
+ * Re-reading：在用户消息前拼接「再读一遍问题」式模板，用于增强模型对复杂问句的关注（可选 Advisor，当前工程未默认挂载）。
+ */
 public class AppReReadingAdvisor implements BaseAdvisor {
 
 	private static final String DEFAULT_RE2_ADVISE_TEMPLATE = """

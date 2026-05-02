@@ -17,6 +17,9 @@ import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
 
+/**
+ * 导购对话与 RAG 管理 API：对话、知识库导入/清空、分区检索嗅探。
+ */
 @RestController
 @RequestMapping("/ai")
 @RequiredArgsConstructor

@@ -10,10 +10,14 @@ import com.gen.ai.service.MockOrderService;
 
 import lombok.RequiredArgsConstructor;
 
+/**
+ * 注册 Spring AI Function Calling 所需的工具 Bean（价格、库存等），供 {@link org.springframework.ai.chat.client.ChatClient} 调用。
+ */
 @Configuration
 @RequiredArgsConstructor
 public class AiToolsConfig {
 
+    /** 工具入参：商品名称（由模型从用户话术中抽取）。 */
     public record ItemRequest(String itemName) {
     }
 

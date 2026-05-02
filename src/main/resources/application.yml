@@ -9,6 +9,13 @@ spring:
   profiles:
     active:
     - dev
+  ai:
+    dashscope:
+      # 必须通过环境变量注入，禁止在 yml 中填写明文密钥（见 README「配置说明」）
+      api-key: ${AI_DASHSCOPE_API_KEY}
+      chat:
+        options:
+          model: qwen-max-latest
 
     # springdoc-openapi项目配置
 springdoc:

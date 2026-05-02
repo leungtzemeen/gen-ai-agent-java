@@ -38,6 +38,9 @@ import com.gen.ai.rag.WiseLinkMultiQueryExpander;
 
 import lombok.extern.slf4j.Slf4j;
 
+/**
+ * RAG 数据管线：Markdown 增量导入、向量索引持久化/清空、按品类过滤与 WiseLink 多查询并行检索。
+ */
 @Service
 @Slf4j
 public class RagDataService {

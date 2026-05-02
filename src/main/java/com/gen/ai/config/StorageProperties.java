@@ -4,6 +4,7 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
 
 import lombok.Data;
 
+/** {@code app.storage.*}：本地根目录、会话历史、RAG 文档目录与向量索引路径。 */
 @Data
 @ConfigurationProperties(prefix = "app.storage")
 public class StorageProperties {

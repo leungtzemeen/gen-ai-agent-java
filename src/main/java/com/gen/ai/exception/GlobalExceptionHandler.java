@@ -7,6 +7,9 @@ import org.springframework.web.bind.annotation.RestControllerAdvice;
 
 import lombok.extern.slf4j.Slf4j;
 
+/**
+ * 统一 REST 异常处理：本地敏感词与 DashScope 云端审核失败返回友好文案；其它运行时异常返回 500。
+ */
 @RestControllerAdvice
 @Slf4j
 public class GlobalExceptionHandler {

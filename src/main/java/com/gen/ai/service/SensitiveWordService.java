@@ -16,6 +16,9 @@ import com.gen.ai.config.AppSecurityProperties;
 import cn.hutool.dfa.WordTree;
 import lombok.extern.slf4j.Slf4j;
 
+/**
+ * 本地敏感词检测：公开词库（classpath Base64 词表）+ 可选影子词（配置项 Base64），基于 Hutool {@link WordTree} DFA。
+ */
 @Service
 @Slf4j
 public class SensitiveWordService {

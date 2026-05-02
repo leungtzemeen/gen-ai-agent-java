@@ -9,6 +9,9 @@ import org.springframework.stereotype.Service;
 
 import lombok.extern.slf4j.Slf4j;
 
+/**
+ * 演示用订单/商品数据源：内存 Map 模拟价格与库存，供 Function Calling 工具回调。
+ */
 @Service
 @Slf4j
 public class MockOrderService {
@@ -21,6 +24,7 @@ public class MockOrderService {
             new Product("SKU-2002", "Apple AirPods Pro 2", new BigDecimal("1899.00"), 18),
             keyOf("小米电视 S Pro"), new Product("SKU-3001", "小米电视 S Pro 75英寸", new BigDecimal("4999.00"), 10));
 
+    /** 查询商品单价；名称经归一化与双向包含匹配，未命中则抛出 {@link IllegalArgumentException}。 */
     public BigDecimal getProductPrice(String itemName) {
         Objects.requireNonNull(itemName, "itemName");
         Product product = requireProduct(itemName);
@@ -28,6 +32,7 @@ public class MockOrderService {
         return product.price();
     }
 
+    /** 查询商品库存数量；匹配规则同 {@link #getProductPrice(String)}。 */
     public int getProductStock(String itemName) {
         Objects.requireNonNull(itemName, "itemName");
         Product product = requireProduct(itemName);

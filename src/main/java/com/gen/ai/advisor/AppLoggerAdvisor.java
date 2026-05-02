@@ -12,6 +12,9 @@ import org.springframework.ai.chat.model.ChatResponse;
 import lombok.extern.slf4j.Slf4j;
 import reactor.core.publisher.Flux;
 
+/**
+ * 在 ChatClient 调用链前后打印用户输入与模型输出，便于排查 RAG 与工具调用问题。
+ */
 @Slf4j
 public class AppLoggerAdvisor implements CallAdvisor, StreamAdvisor {
 

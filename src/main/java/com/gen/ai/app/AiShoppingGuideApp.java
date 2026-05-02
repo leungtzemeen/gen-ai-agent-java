@@ -25,14 +25,14 @@ import com.gen.ai.service.SensitiveWordService;
 
 import lombok.extern.slf4j.Slf4j;
 
-@Component
-@Slf4j
 /**
  * AI 导购应用入口（Spring 组件）。
  * <p>
  * 通过 {@link RetrievalAugmentationAdvisor} 将 WiseLink RAG（查询压缩改写 → 分身检索 → 上下文注入）挂入 {@link ChatClient}；
  * 人设系统提示来自 {@link AssistantGuidePromptBundle}（解析自 {@code assistant-guide.st}）。
  */
+@Component
+@Slf4j
 public class AiShoppingGuideApp {
 
     private static final String ASSISTANT_GUIDE_VAR_CURRENT_DATE = "current_date";
@@ -63,6 +63,9 @@ public class AiShoppingGuideApp {
         log.info(">>>> [System] WiseLink 金牌导购人设加载成功（含 Modular RAG Advisor）。");
     }
 
+    /**
+     * 发起对话，不按品类过滤向量检索（等价于 {@link #doChat(String, String, String)} 且 {@code category} 为 {@code null}）。
+     */
     public String doChat(String message, String chatId) {
         return doChat(message, chatId, null);
     }
@@ -98,10 +101,10 @@ public class AiShoppingGuideApp {
         String content = response == null || response.getResult() == null || response.getResult().getOutput() == null
                 ? ""
                 : response.getResult().getOutput().getText();
-        log.info(">>>> [AI Request] content: {}", content);
         return content;
     }
 
+    /** 渲染人设系统提示（替换 {@code assistant-guide.st} 中的日期等变量）。 */
     private String renderAssistantGuideSystemPrompt() {
         String today = LocalDate.now().toString();
         String rendered = new SystemPromptTemplate(assistantGuidePromptBundle.systemPromptResource())
@@ -138,10 +141,14 @@ public class AiShoppingGuideApp {
         return null;
     }
 
+    /** 结构化购物建议报告（由模型按当前对话生成的标题与建议列表）。 */
     public record ShoppingReport(String title, List<String> suggesions) {
 
     }
 
+    /**
+     * 带「购物建议报告」输出的对话：在系统提示中追加报告格式约束，并按关键词推断 {@code biz_category} 做分区检索。
+     */
     public ShoppingReport doChatWithReport(String message, String chatId) {
         if (sensitiveWordService.containsSensitiveWord(message)) {
             log.warn(">>>> [Security] 检测到敏感提问，已在本地拦截");
@@ -167,7 +174,6 @@ public class AiShoppingGuideApp {
                 })
                 .call()
                 .entity(ShoppingReport.class);
-        log.info("<<<< [AI Response] ShoppingReport: {}", shoppingReport);
         return shoppingReport;
     }
 }

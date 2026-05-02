@@ -22,7 +22,7 @@ import com.gen.ai.config.StorageProperties;
 import lombok.extern.slf4j.Slf4j;
 
 /**
- * 基于文件持久化的对话记忆
+ * 基于本地目录与 Kryo 序列化的 {@link ChatMemoryRepository} 实现；每个会话对应一个 {@code .kryo} 文件，文件名由 conversationId 经 URL-Safe Base64 编码。
  */
 @Slf4j
 public class FileChatMemoryRepository implements ChatMemoryRepository {

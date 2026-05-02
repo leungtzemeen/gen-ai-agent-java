@@ -21,6 +21,9 @@ import jakarta.annotation.PostConstruct;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 
+/**
+ * 本地存储与向量库 Bean：会话记忆仓库、滑动窗口记忆、{@link SimpleVectorStore} 持久化加载。
+ */
 @Configuration
 @EnableConfigurationProperties({ StorageProperties.class, AppSecurityProperties.class })
 @RequiredArgsConstructor
@@ -47,7 +50,7 @@ public class StorageConfig {
         log.info(">>>> [记忆系统] 已挂载 10 条消息窗口记忆管理");
         return MessageWindowChatMemory.builder()
                 .chatMemoryRepository(repository)
-                .maxMessages(10) // 💡 逻辑层：在这里控制记忆长度
+                .maxMessages(10) // 对话窗口最多保留的消息条数
                 .build();
     }
 
