@@ -1,4 +1,4 @@
-package com.gen.ai.controller;
+package com.gen.ai.web;
 
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RestController;

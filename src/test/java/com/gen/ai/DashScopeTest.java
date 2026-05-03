@@ -5,7 +5,7 @@ import cn.hutool.http.Header;
 import cn.hutool.http.HttpResponse;
 import cn.hutool.http.HttpUtil;
 import com.alibaba.cloud.ai.dashscope.chat.DashScopeChatModel;
-import com.gen.ai.app.AiShoppingGuideApp;
+import com.gen.ai.application.shopping.AiShoppingGuideApp;
 
 import cn.hutool.json.JSONArray;
 import cn.hutool.json.JSONObject;

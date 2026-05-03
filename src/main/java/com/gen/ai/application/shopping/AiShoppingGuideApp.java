@@ -1,4 +1,4 @@
-package com.gen.ai.app;
+package com.gen.ai.application.shopping;
 
 import java.time.LocalDate;
 import java.util.List;
@@ -21,9 +21,9 @@ import org.springframework.stereotype.Component;
 import jakarta.annotation.PostConstruct;
 
 import com.gen.ai.advisor.AppLoggerAdvisor;
-import com.gen.ai.exception.SensitivePromptException;
+import com.gen.ai.common.exception.SensitivePromptException;
+import com.gen.ai.infrastructure.security.SensitiveWordService;
 import com.gen.ai.prompt.AssistantGuidePromptBundle;
-import com.gen.ai.service.SensitiveWordService;
 import com.gen.ai.wiselink.WiseLinkToolFactory;
 import com.gen.ai.wiselink.security.WiseLinkToolSecurityInterceptor;
 

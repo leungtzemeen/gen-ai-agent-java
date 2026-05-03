@@ -1,7 +1,8 @@
-package com.gen.ai.service;
+package com.gen.ai.wiselink.tools;
 
 import org.springframework.stereotype.Service;
 
+import com.gen.ai.infrastructure.mock.MockOrderService;
 import com.gen.ai.wiselink.annotation.WiseLinkTool;
 
 import lombok.RequiredArgsConstructor;

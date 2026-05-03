@@ -1,4 +1,4 @@
-package com.gen.ai.service;
+package com.gen.ai.infrastructure.security;
 
 import java.nio.charset.StandardCharsets;
 import java.util.Base64;

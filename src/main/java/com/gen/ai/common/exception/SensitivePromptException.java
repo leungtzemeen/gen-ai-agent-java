@@ -1,4 +1,4 @@
-package com.gen.ai.exception;
+package com.gen.ai.common.exception;
 
 /**
  * 本地敏感提问拦截异常：在调用大模型前直接拒绝。

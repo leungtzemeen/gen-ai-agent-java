@@ -1,4 +1,4 @@
-package com.gen.ai.memory;
+package com.gen.ai.infrastructure.memory;
 
 import java.io.File;
 import java.io.FileInputStream;

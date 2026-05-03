@@ -1,4 +1,4 @@
-package com.gen.ai.controller;
+package com.gen.ai.web;
 
 import java.util.List;
 
@@ -11,8 +11,8 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
-import com.gen.ai.app.AiShoppingGuideApp;
-import com.gen.ai.service.RagDataService;
+import com.gen.ai.application.shopping.AiShoppingGuideApp;
+import com.gen.ai.infrastructure.rag.RagDataService;
 
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;

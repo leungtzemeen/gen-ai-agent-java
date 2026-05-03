@@ -1,4 +1,4 @@
-package com.gen.ai.service;
+package com.gen.ai.infrastructure.rag;
 
 import java.io.File;
 import java.io.IOException;

@@ -1,4 +1,4 @@
-package com.gen.ai.service;
+package com.gen.ai.wiselink.tools;
 
 import java.net.URI;
 import java.net.URLEncoder;
@@ -109,6 +109,7 @@ public class WiseLinkExternalSearchService {
 
     @WiseLinkTool(
             name = "scrapeWebsiteContent",
+            enabled = false,
             description = TOOL_GUARDRAIL
                     + "根据用户明确提供的公开商品详情页 URL（仅 http/https），使用 Jsoup 抓取页面并抽取标题与正文纯文本，"
                     + "供跨站摘要与比价引用；不得对用户未给出的链接、内网或非 HTTP(S) 地址擅自抓取。"

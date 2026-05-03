@@ -1,4 +1,4 @@
-package com.gen.ai.service;
+package com.gen.ai.infrastructure.mock;
 
 import java.math.BigDecimal;
 import java.util.Locale;

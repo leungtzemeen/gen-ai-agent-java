@@ -1,4 +1,4 @@
-package com.gen.ai.service;
+package com.gen.ai.wiselink.tools;
 
 import java.io.IOException;
 import java.io.InputStream;
