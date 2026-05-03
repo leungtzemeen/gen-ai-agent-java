@@ -36,6 +36,9 @@ application-dev.yml
 # WiseLink PDF exports (generated locally)
 exports/
 
+# WiseLink downloads (user-requested attachments)
+downloads/
+
 # storage files
 **/data/
 *.kryo
