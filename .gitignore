@@ -33,6 +33,9 @@ application-dev.yml
 /logs/
 *.log
 
+# WiseLink PDF exports (generated locally)
+exports/
+
 # storage files
 **/data/
 *.kryo
