@@ -17,6 +17,7 @@ import java.util.Locale;
 import org.springframework.stereotype.Service;
 
 import com.gen.ai.wiselink.annotation.WiseLinkTool;
+import com.gen.ai.wiselink.security.WiseLinkToolSecurityInterceptor;
 
 import cn.hutool.http.HttpUtil;
 import cn.hutool.json.JSONObject;
@@ -48,7 +49,6 @@ public class WiseLinkSystemToolsService {
 
     @WiseLinkTool(
             name = "recordUserInterest",
-            enabled = false,
             description = "将用户当前的选购意向以 JSON Lines（每行一条完整 JSON）追加写入本地日志，便于后续会话或运营侧跟进。"
                     + "当用户明确表达购买意愿或要求你记住某个选择时，请调用此工具进行持久化记录。"
                     + "请传入用户标识 userId（可为会话 ID、会员号等业务侧 ID）、商品名称 productName、核心诉求摘要 userCoreRequirement。"
@@ -143,7 +143,8 @@ public class WiseLinkSystemToolsService {
             description = "从用户提供的公开 HTTP(S) 链接下载资料到本地 downloads 目录，用于保存说明书、压缩包或演示视频等附件。"
                     + "仅允许安全的文件后缀：.pdf、.zip、.mp4。"
                     + "在已通过 exportShoppingReport 生成 PDF 选购报告后，若用户还需要下载相关产品高清画质演示片源或更详细的说明书/附件包，请主动引导其发起下载请求并调用本工具完成落地。"
-                    + "成功后请将返回的本地路径告知用户。")
+                    + "成功后请将返回的本地路径告知用户。"
+                    + WiseLinkToolSecurityInterceptor.TOOL_DESCRIPTION_SECURITY_NOTICE)
     public String downloadExpertGuide(ExpertGuideDownloadRequest request) {
         try {
             String rawUrl = request == null || request.fileUrl() == null ? "" : request.fileUrl().trim();

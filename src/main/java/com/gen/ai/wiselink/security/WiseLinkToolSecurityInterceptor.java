@@ -1,0 +1,113 @@
+package com.gen.ai.wiselink.security;
+
+import java.util.List;
+import java.util.Locale;
+import java.util.Objects;
+import java.util.Set;
+import java.util.stream.Collectors;
+
+import org.springframework.ai.chat.model.ToolContext;
+import org.springframework.ai.tool.ToolCallback;
+import org.springframework.ai.tool.definition.ToolDefinition;
+import org.springframework.stereotype.Component;
+
+/**
+ * WiseLink 2.1 工具权限：按会话标识（sessionId）区分 VIP 与普通用户，对受限工具在执行前拦截。
+ * <p>
+ * 会话维度通过 {@link org.springframework.ai.chat.client.ChatClient} 的 {@code toolContext} 传入，
+ * 键名使用 {@link #TOOL_CONTEXT_SESSION_ID_KEY}；模型调用工具时由框架传入 {@link ToolContext}。
+ */
+@Component
+public class WiseLinkToolSecurityInterceptor {
+
+    /** 放入 {@code ChatClient.prompt()...toolContext(Map)}，供受限工具执行时读取当前会话 ID。 */
+    public static final String TOOL_CONTEXT_SESSION_ID_KEY = "wiseLinkSessionId";
+
+    /** 白名单：查价格、查库存 — 始终允许。 */
+    private static final Set<String> WHITELIST_TOOLS =
+            Set.of("getProductPriceFunction", "getProductStockFunction");
+
+    /** 受限：全网搜索、网页抓取、PDF 导出、资源下载 — 仅当 sessionId 含 VIP 关键字时允许。 */
+    private static final Set<String> VIP_RESTRICTED_TOOLS =
+            Set.of("searchProductOnWeb", "scrapeWebsiteContent", "exportShoppingReport", "downloadExpertGuide");
+
+    public static final String VIP_DENIED_MESSAGE = "[权限提醒] 该功能为 VIP 专属，普通用户暂无法使用。";
+
+    /**
+     * 为受限工具包一层执行前校验；白名单工具保持原始 {@link ToolCallback}。
+     */
+    public List<ToolCallback> wrapCallbacks(List<ToolCallback> callbacks) {
+        return callbacks.stream().map(this::wrapOne).collect(Collectors.toUnmodifiableList());
+    }
+
+    private ToolCallback wrapOne(ToolCallback delegate) {
+        String name = delegate.getToolDefinition().name();
+        if (WHITELIST_TOOLS.contains(name)) {
+            return delegate;
+        }
+        if (VIP_RESTRICTED_TOOLS.contains(name)) {
+            return new VipRestrictedToolCallback(delegate);
+        }
+        return delegate;
+    }
+
+    /**
+     * sessionId 中包含子串 {@code VIP}（忽略大小写）则视为 VIP 会话。
+     */
+    public static boolean isVipSessionId(String sessionId) {
+        if (sessionId == null || sessionId.isBlank()) {
+            return false;
+        }
+        return sessionId.toUpperCase(Locale.ROOT).contains("VIP");
+    }
+
+    static String extractSessionId(ToolContext toolContext) {
+        if (toolContext == null || toolContext.getContext() == null) {
+            return null;
+        }
+        Object raw = toolContext.getContext().get(TOOL_CONTEXT_SESSION_ID_KEY);
+        if (raw == null) {
+            return null;
+        }
+        String s = Objects.toString(raw, "").trim();
+        return s.isEmpty() ? null : s;
+    }
+
+    /**
+     * 受限工具描述后缀（供 {@code @WiseLinkTool(description = ...)} 拼接；模型侧可见）。
+     */
+    public static final String TOOL_DESCRIPTION_SECURITY_NOTICE = "注意：此工具受权限控制，非 VIP 会话将调用失败。";
+
+    private static final class VipRestrictedToolCallback implements ToolCallback {
+
+        private final ToolCallback delegate;
+
+        VipRestrictedToolCallback(ToolCallback delegate) {
+            this.delegate = delegate;
+        }
+
+        @Override
+        public ToolDefinition getToolDefinition() {
+            return delegate.getToolDefinition();
+        }
+
+        @Override
+        public String call(String toolInput) {
+            return call(toolInput, null);
+        }
+
+        @Override
+        public String call(String toolInput, ToolContext toolContext) {
+            String sessionId = extractSessionId(toolContext);
+            if (!isVipSessionId(sessionId)) {
+                return VIP_DENIED_MESSAGE;
+            }
+            return delegate.call(toolInput, toolContext);
+        }
+
+        @Override
+        public String toString() {
+            return "VipRestrictedToolCallback{" + delegate + "}";
+        }
+    }
+}

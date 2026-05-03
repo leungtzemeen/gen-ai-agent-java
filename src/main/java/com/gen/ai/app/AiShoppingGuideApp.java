@@ -2,8 +2,10 @@ package com.gen.ai.app;
 
 import java.time.LocalDate;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
+import java.util.regex.Pattern;
 
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.chat.client.advisor.MessageChatMemoryAdvisor;
@@ -23,8 +25,12 @@ import com.gen.ai.exception.SensitivePromptException;
 import com.gen.ai.prompt.AssistantGuidePromptBundle;
 import com.gen.ai.service.SensitiveWordService;
 import com.gen.ai.wiselink.WiseLinkToolFactory;
+import com.gen.ai.wiselink.security.WiseLinkToolSecurityInterceptor;
 
 import lombok.extern.slf4j.Slf4j;
+import reactor.core.publisher.BufferOverflowStrategy;
+import reactor.core.publisher.Flux;
+import reactor.core.scheduler.Schedulers;
 
 /**
  * AI 导购应用入口（Spring 组件）。
@@ -35,6 +41,14 @@ import lombok.extern.slf4j.Slf4j;
 @Component
 @Slf4j
 public class AiShoppingGuideApp {
+
+    private static final int STREAM_BACKPRESSURE_BUFFER_SIZE = 1024;
+
+    /** 启发式：更像会触发 WiseLink 工具（PDF/价格/库存/下载等）的提问走阻塞 call，先完整执行工具再一次性返回，避免与流式冲突。 */
+    private static final Pattern LIKELY_TOOL_QUERY =
+            Pattern.compile(
+                    "(导出|PDF|pdf|报告|购物建议书|说明书|下载|库存|价格|多少钱|全网|比价|网页|抓取|记住|意向)",
+                    Pattern.CASE_INSENSITIVE | Pattern.UNICODE_CASE);
 
     private static final String ASSISTANT_GUIDE_VAR_CURRENT_DATE = "current_date";
 
@@ -93,6 +107,7 @@ public class AiShoppingGuideApp {
                 .system(systemMessage)
                 .user(Objects.requireNonNullElse(message, ""))
                 .toolCallbacks(wiseLinkToolFactory.toolCallbacks())
+                .toolContext(Map.of(WiseLinkToolSecurityInterceptor.TOOL_CONTEXT_SESSION_ID_KEY, conversationId))
                 .advisors(spec -> {
                     spec.param(ChatMemory.CONVERSATION_ID, (Object) conversationId);
                     if (useCategoryFilter) {
@@ -106,6 +121,58 @@ public class AiShoppingGuideApp {
                 ? ""
                 : response.getResult().getOutput().getText();
         return content;
+    }
+
+    /**
+     * 流式对话：默认对「更像会触发工具」的请求先走完整 {@link #doChat}（工具执行完毕后再下发），
+     * 其余请求使用 {@link ChatClient} {@code stream().content()} 按 token/片段推送。
+     */
+    public Flux<String> doChatStream(String message, String chatId, String category) {
+        if (sensitiveWordService.containsSensitiveWord(message)) {
+            log.warn(">>>> [Security] 检测到敏感提问，已在本地拦截");
+            return Flux.error(new SensitivePromptException());
+        }
+
+        if (likelyNeedsToolFirst(message)) {
+            log.info(">>>> [WiseLink-Stream] 启发式判定可能涉及工具调用，先同步执行完整链路再下发结果");
+            return Flux.defer(() -> Flux.just(doChat(message, chatId, category)))
+                    .subscribeOn(Schedulers.boundedElastic())
+                    .onBackpressureBuffer(
+                            STREAM_BACKPRESSURE_BUFFER_SIZE,
+                            BufferOverflowStrategy.ERROR);
+        }
+
+        String systemMessage = renderAssistantGuideSystemPrompt();
+        String conversationId = (chatId == null || chatId.isBlank()) ? "default" : chatId;
+        boolean useCategoryFilter = category != null && !category.isBlank();
+
+        Flux<String> tokens = chatClient
+                .prompt()
+                .system(systemMessage)
+                .user(Objects.requireNonNullElse(message, ""))
+                .toolCallbacks(wiseLinkToolFactory.toolCallbacks())
+                .toolContext(Map.of(WiseLinkToolSecurityInterceptor.TOOL_CONTEXT_SESSION_ID_KEY, conversationId))
+                .advisors(spec -> {
+                    spec.param(ChatMemory.CONVERSATION_ID, (Object) conversationId);
+                    if (useCategoryFilter) {
+                        Filter.Expression exp = new FilterExpressionBuilder().eq("biz_category", category).build();
+                        spec.param(VectorStoreDocumentRetriever.FILTER_EXPRESSION, exp);
+                    }
+                })
+                .stream()
+                .content();
+
+        return tokens
+                .onBackpressureBuffer(
+                        STREAM_BACKPRESSURE_BUFFER_SIZE,
+                        BufferOverflowStrategy.ERROR);
+    }
+
+    private static boolean likelyNeedsToolFirst(String message) {
+        if (message == null || message.isBlank()) {
+            return false;
+        }
+        return LIKELY_TOOL_QUERY.matcher(message).find();
     }
 
     /** 渲染人设系统提示（替换 {@code assistant-guide.st} 中的日期等变量）。 */
@@ -129,7 +196,7 @@ public class AiShoppingGuideApp {
         if (prompt == null || prompt.isBlank()) {
             return null;
         }
-        String p = prompt.toLowerCase();
+        String p = prompt.toLowerCase(Locale.ROOT);
 
         if (p.contains("cleaning") || p.contains("清洗") || p.contains("清洁") || p.contains("除菌") || p.contains("消毒")) {
             return "家电清洗";

@@ -3,6 +3,7 @@ package com.gen.ai.controller;
 import java.util.List;
 
 import org.springframework.ai.document.Document;
+import org.springframework.http.MediaType;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -16,25 +17,29 @@ import com.gen.ai.service.RagDataService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
+import reactor.core.publisher.Flux;
 
 /**
- * 导购对话与 RAG 管理 API：对话、知识库导入/清空、分区检索嗅探。
+ * 导购对话与 RAG 管理 API：对话（支持 SSE 流式）、知识库导入/清空、分区检索嗅探。
  */
 @RestController
 @RequestMapping("/ai")
 @RequiredArgsConstructor
 @Tag(name = "AI 智能导购系统")
-public class ShoppingController {
+public class AiShoppingGuideController {
 
     private final AiShoppingGuideApp aiShoppingGuideApp;
     private final RagDataService ragDataService;
 
-    @GetMapping("/chat")
-    @Operation(summary = "智能对话（RAG增强）", description = "输入 prompt 与 sessionId（默认 default），内部调用 doChatWithRag 进行检索增强对话。")
-    public String chat(@RequestParam("prompt") String prompt,
+    @GetMapping(value = "/chat", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
+    @Operation(
+            summary = "智能对话（RAG增强，流式）",
+            description = "SSE：按片段推送模型输出；若启发式判定可能触发 WiseLink 工具，则先同步执行工具再以单段文本下发。")
+    public Flux<String> chat(
+            @RequestParam("prompt") String prompt,
             @RequestParam(value = "sessionId", defaultValue = "default") String sessionId,
             @RequestParam(value = "category", required = false) String category) {
-        return aiShoppingGuideApp.doChat(prompt, sessionId, category);
+        return aiShoppingGuideApp.doChatStream(prompt, sessionId, category);
     }
 
     @PostMapping("/admin/import")
@@ -53,8 +58,7 @@ public class ShoppingController {
 
     @GetMapping("/test/filter-search")
     @Operation(summary = "测试：分区检索（按分类过滤）", description = "用于验证 biz_category 元数据过滤是否生效：直接返回命中的切片内容（不调用大模型）。")
-    public String testFilterSearch(@RequestParam("prompt") String prompt,
-            @RequestParam("category") String category) {
+    public String testFilterSearch(@RequestParam("prompt") String prompt, @RequestParam("category") String category) {
         List<Document> docs = ragDataService.similaritySearch(prompt, category);
         if (docs == null || docs.isEmpty()) {
             return "no matches";
@@ -62,11 +66,12 @@ public class ShoppingController {
         StringBuilder sb = new StringBuilder();
         for (int i = 0; i < docs.size(); i++) {
             Document d = docs.get(i);
-            sb.append("[").append(i).append("] ")
+            sb.append("[")
+                    .append(i)
+                    .append("] ")
                     .append(d == null ? "" : String.valueOf(d.getText()))
                     .append(System.lineSeparator());
         }
         return sb.toString();
     }
 }
-

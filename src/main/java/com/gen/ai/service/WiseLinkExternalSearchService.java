@@ -12,6 +12,7 @@ import org.jsoup.nodes.Document;
 import org.springframework.stereotype.Service;
 
 import com.gen.ai.wiselink.annotation.WiseLinkTool;
+import com.gen.ai.wiselink.security.WiseLinkToolSecurityInterceptor;
 
 import lombok.extern.slf4j.Slf4j;
 
@@ -47,7 +48,8 @@ public class WiseLinkExternalSearchService {
             name = "searchProductOnWeb",
             description = TOOL_GUARDRAIL
                     + "模拟全网低价检索（演示）：根据关键词返回若干条带 URL 的占位链接与参考价摘要，非真实电商接口；"
-                    + "用于演示「全网比价」链路，上线后可替换为合规搜索 API。")
+                    + "用于演示「全网比价」链路，上线后可替换为合规搜索 API。"
+                    + WiseLinkToolSecurityInterceptor.TOOL_DESCRIPTION_SECURITY_NOTICE)
     public String searchProductOnWeb(WebSearchRequest request) {
         try {
             String q = request == null || request.query() == null ? "" : request.query().trim();
@@ -107,10 +109,10 @@ public class WiseLinkExternalSearchService {
 
     @WiseLinkTool(
             name = "scrapeWebsiteContent",
-            enabled = false,
             description = TOOL_GUARDRAIL
                     + "根据用户明确提供的公开商品详情页 URL（仅 http/https），使用 Jsoup 抓取页面并抽取标题与正文纯文本，"
-                    + "供跨站摘要与比价引用；不得对用户未给出的链接、内网或非 HTTP(S) 地址擅自抓取。")
+                    + "供跨站摘要与比价引用；不得对用户未给出的链接、内网或非 HTTP(S) 地址擅自抓取。"
+                    + WiseLinkToolSecurityInterceptor.TOOL_DESCRIPTION_SECURITY_NOTICE)
     public String scrapeWebsiteContent(UrlRequest request) {
         try {
             String raw = request == null || request.url() == null ? "" : request.url().trim();

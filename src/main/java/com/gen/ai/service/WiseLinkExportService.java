@@ -17,6 +17,7 @@ import java.util.Locale;
 import org.springframework.stereotype.Service;
 
 import com.gen.ai.wiselink.annotation.WiseLinkTool;
+import com.gen.ai.wiselink.security.WiseLinkToolSecurityInterceptor;
 import com.lowagie.text.Document;
 import com.lowagie.text.DocumentException;
 import com.lowagie.text.Element;
@@ -56,7 +57,8 @@ public class WiseLinkExportService {
             description = "将完整的选购建议、对比结论或方案总结导出为 PDF 文件。"
                     + "当用户表示想保存方案、发给家人朋友查看、留档、打印，或需要一份正式的选购建议书 / 简报时，请主动调用本工具；"
                     + "入参 recommendationText 应填入当前对话中已形成的可读选购结论（可分条、含预算与备选型号等）。"
-                    + "调用成功后请将返回的文件路径告知用户，便于其在 exports 目录下打开该 PDF。")
+                    + "调用成功后请将返回的文件路径告知用户，便于其在 exports 目录下打开该 PDF。"
+                    + WiseLinkToolSecurityInterceptor.TOOL_DESCRIPTION_SECURITY_NOTICE)
     public String exportShoppingReport(ShoppingReportExportRequest request) {
         try {
             String raw = request == null || request.recommendationText() == null
