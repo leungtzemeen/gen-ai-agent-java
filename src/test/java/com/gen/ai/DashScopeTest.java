@@ -113,7 +113,7 @@ class DashScopeTest {
     @Test
     void aiShoppingGuideAppDoChatDemo() {
         // String chaId = UUID.randomUUID().toString();
-        // String chaId = "c7b04518-e6b7-4c7b-8d02-8a9d16a1b241";
+        // String chaId = "c7b04518-e6b7-4c7b-8d02-8a9d16a1b260";
         String chaId = "c7b04518-e6b7-4c7b-8d02-8a9d16a1b242";
         // 第一轮
         String message = "如果我家客厅开间是 3.5 米，平时爱看 4K 电影，你建议我选多大的电视？给个具体的推荐型号。";
