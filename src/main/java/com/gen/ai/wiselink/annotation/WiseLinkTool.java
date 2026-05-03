@@ -19,4 +19,7 @@ public @interface WiseLinkTool {
 
     /** 工具自然语言描述，供模型理解调用时机与语义。 */
     String description();
+
+    /** 功能开关：为 {@code false} 时不注册到 WiseLink，对话侧不可见、不可调用。 */
+    boolean enabled() default true;
 }

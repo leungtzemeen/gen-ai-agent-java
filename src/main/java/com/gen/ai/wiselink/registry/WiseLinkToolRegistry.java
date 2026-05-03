@@ -30,6 +30,7 @@ import lombok.extern.slf4j.Slf4j;
 /**
  * WiseLink 工具注册中心：在容器启动完成后扫描 Spring Bean，将 {@link WiseLinkTool} 标注的实例方法
  * 包装为 Spring AI 的 {@link MethodToolCallback}（内部基于反射分发，与 {@link java.lang.invoke.MethodHandle} 同属 JVM 可调目标）。
+ * 仅当 {@link WiseLinkTool#enabled()} 为 {@code true} 时才会注册；禁用的工具不会出现在模型可用工具列表中。
  */
 @Component
 @Slf4j
@@ -80,6 +81,10 @@ public class WiseLinkToolRegistry implements SmartInitializingSingleton {
         String toolName = Objects.requireNonNull(meta.name(), "name").trim();
         if (toolName.isEmpty()) {
             throw new IllegalStateException("@WiseLinkTool name 不能为空: " + methodKey(bean, method));
+        }
+        if (!meta.enabled()) {
+            log.info("WiseLink 工具已禁用（enabled=false），跳过注册：{}", toolName);
+            return;
         }
         if (discovered.containsKey(toolName)) {
             throw new IllegalStateException("WiseLink 工具名冲突: " + toolName);
