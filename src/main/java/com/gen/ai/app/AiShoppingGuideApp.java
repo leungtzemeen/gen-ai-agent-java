@@ -22,6 +22,7 @@ import com.gen.ai.advisor.AppLoggerAdvisor;
 import com.gen.ai.exception.SensitivePromptException;
 import com.gen.ai.prompt.AssistantGuidePromptBundle;
 import com.gen.ai.service.SensitiveWordService;
+import com.gen.ai.wiselink.WiseLinkToolFactory;
 
 import lombok.extern.slf4j.Slf4j;
 
@@ -41,15 +42,18 @@ public class AiShoppingGuideApp {
 
     private final AssistantGuidePromptBundle assistantGuidePromptBundle;
     private final SensitiveWordService sensitiveWordService;
+    private final WiseLinkToolFactory wiseLinkToolFactory;
 
     public AiShoppingGuideApp(
             ChatClient.Builder chatClientBuilder,
             ChatMemory chatMemory,
             RetrievalAugmentationAdvisor wiseLinkRetrievalAugmentationAdvisor,
             AssistantGuidePromptBundle assistantGuidePromptBundle,
-            SensitiveWordService sensitiveWordService) {
+            SensitiveWordService sensitiveWordService,
+            WiseLinkToolFactory wiseLinkToolFactory) {
         this.assistantGuidePromptBundle = assistantGuidePromptBundle;
         this.sensitiveWordService = sensitiveWordService;
+        this.wiseLinkToolFactory = wiseLinkToolFactory;
         this.chatClient = chatClientBuilder
                 .defaultAdvisors(
                         MessageChatMemoryAdvisor.builder(Objects.requireNonNull(chatMemory)).build(),
@@ -88,7 +92,7 @@ public class AiShoppingGuideApp {
                 .prompt()
                 .system(systemMessage)
                 .user(Objects.requireNonNullElse(message, ""))
-                .toolNames("getProductPriceFunction", "getProductStockFunction")
+                .toolCallbacks(wiseLinkToolFactory.toolCallbacks())
                 .advisors(spec -> {
                     spec.param(ChatMemory.CONVERSATION_ID, (Object) conversationId);
                     if (useCategoryFilter) {
