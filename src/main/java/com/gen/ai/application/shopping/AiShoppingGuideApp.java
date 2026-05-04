@@ -22,9 +22,9 @@ import jakarta.annotation.PostConstruct;
 
 import com.gen.ai.advisor.AppLoggerAdvisor;
 import com.gen.ai.common.exception.SensitivePromptException;
+import com.gen.ai.infrastructure.mcp.McpClientConfig.ShoppingGuideMergedToolCallbacks;
 import com.gen.ai.infrastructure.security.SensitiveWordService;
 import com.gen.ai.prompt.AssistantGuidePromptBundle;
-import com.gen.ai.wiselink.WiseLinkToolFactory;
 import com.gen.ai.wiselink.security.WiseLinkToolSecurityInterceptor;
 
 import lombok.extern.slf4j.Slf4j;
@@ -56,7 +56,7 @@ public class AiShoppingGuideApp {
 
     private final AssistantGuidePromptBundle assistantGuidePromptBundle;
     private final SensitiveWordService sensitiveWordService;
-    private final WiseLinkToolFactory wiseLinkToolFactory;
+    private final ShoppingGuideMergedToolCallbacks shoppingGuideMergedToolCallbacks;
 
     public AiShoppingGuideApp(
             ChatClient.Builder chatClientBuilder,
@@ -64,10 +64,10 @@ public class AiShoppingGuideApp {
             RetrievalAugmentationAdvisor wiseLinkRetrievalAugmentationAdvisor,
             AssistantGuidePromptBundle assistantGuidePromptBundle,
             SensitiveWordService sensitiveWordService,
-            WiseLinkToolFactory wiseLinkToolFactory) {
+            ShoppingGuideMergedToolCallbacks shoppingGuideMergedToolCallbacks) {
         this.assistantGuidePromptBundle = assistantGuidePromptBundle;
         this.sensitiveWordService = sensitiveWordService;
-        this.wiseLinkToolFactory = wiseLinkToolFactory;
+        this.shoppingGuideMergedToolCallbacks = shoppingGuideMergedToolCallbacks;
         this.chatClient = chatClientBuilder
                 .defaultAdvisors(
                         MessageChatMemoryAdvisor.builder(Objects.requireNonNull(chatMemory)).build(),
@@ -106,7 +106,7 @@ public class AiShoppingGuideApp {
                 .prompt()
                 .system(systemMessage)
                 .user(Objects.requireNonNullElse(message, ""))
-                .toolCallbacks(wiseLinkToolFactory.toolCallbacks())
+                .toolCallbacks(shoppingGuideMergedToolCallbacks.allToolCallbacks())
                 .toolContext(Map.of(WiseLinkToolSecurityInterceptor.TOOL_CONTEXT_SESSION_ID_KEY, conversationId))
                 .advisors(spec -> {
                     spec.param(ChatMemory.CONVERSATION_ID, (Object) conversationId);
@@ -150,7 +150,7 @@ public class AiShoppingGuideApp {
                 .prompt()
                 .system(systemMessage)
                 .user(Objects.requireNonNullElse(message, ""))
-                .toolCallbacks(wiseLinkToolFactory.toolCallbacks())
+                .toolCallbacks(shoppingGuideMergedToolCallbacks.allToolCallbacks())
                 .toolContext(Map.of(WiseLinkToolSecurityInterceptor.TOOL_CONTEXT_SESSION_ID_KEY, conversationId))
                 .advisors(spec -> {
                     spec.param(ChatMemory.CONVERSATION_ID, (Object) conversationId);

@@ -30,7 +30,12 @@ import org.springframework.test.context.ActiveProfiles;
 /**
  * 端到端调用 DashScope 的集成测试；仅当已配置 {@code AI_DASHSCOPE_API_KEY} 时执行。
  */
-@SpringBootTest
+@SpringBootTest(
+        properties = {
+            "spring.ai.mcp.client.enabled=false",
+            // 与主 yml 一致：从环境变量注入，供本类 @Value 与 DashScope 自动配置解析
+            "spring.ai.dashscope.api-key=${AI_DASHSCOPE_API_KEY}"
+        })
 @ActiveProfiles("dev")
 @EnabledIfEnvironmentVariable(named = "AI_DASHSCOPE_API_KEY", matches = ".+")
 class DashScopeTest {

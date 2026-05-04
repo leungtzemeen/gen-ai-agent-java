@@ -8,16 +8,48 @@ spring:
     import: optional:classpath:application-dev.yml
   profiles:
     active:
-    - dev
+      - dev
   ai:
     dashscope:
       # 必须通过环境变量注入，禁止在 yml 中填写明文密钥（见 README「配置说明」）
       api-key: ${AI_DASHSCOPE_API_KEY}
       chat:
         options:
-          model: qwen-max-latest
+          model: qwen-plus
 
-    # springdoc-openapi项目配置
+    # MCP Client 配置
+    # 开发环境覆盖项（由 application.yml 以 optional 方式导入）
+    #
+    # WiseLink 3.0 — MCP Client：仅 Stdio（SSE/Streamable-HTTP 自动配置已在入口类排除）
+    # 文档：https://docs.spring.io/spring-ai/reference/api/mcp/mcp-client-boot-starter-docs.html
+    #
+    # 点火测试：连接名 map-server，通过 STDIO 拉起外部 MCP（此处用官方 @modelcontextprotocol/server-filesystem
+    # 仅作可运行演示；真实地图 MCP 上线后替换 command/args 即可）。
+    # 需本机已安装 Node.js。Windows：npx 须 cmd.exe /c。macOS/Linux：可改为 command: npx，args 去掉 /c。
+    # 沙箱目录与 args 末项一致；GenAiAgentApplication#main 与 ApplicationReadyEvent 均会尝试创建该目录。
+    # 启动成功后日志检索：「[WiseLink-MCP] 已发现并注册外部工具列表」。
+    # 若暂不联调，将 enabled 改为 false（集成测试已强制关闭 MCP，见 src/test/resources/application.properties）。
+    mcp:
+      client:
+        enabled: true
+        name: wiselink-mcp-client
+        type: SYNC
+        # 含 MCP initialize 等阶段，过大会阻塞启动；过短可能导致慢速 npx 首次拉包失败（见 McpClientConfig 容错）
+        request-timeout: 5s
+        toolcallback:
+          enabled: true
+        stdio:
+          connections:
+            map-server:
+              command: cmd.exe
+              args:
+                - /c
+                - npx
+                - "-y"
+                - "@modelcontextprotocol/server-filesystem"
+                - ./data/gen-ai-agent/mcp-map-sandbox
+
+# springdoc-openapi项目配置
 springdoc:
   swagger-ui:
     path: /swagger-ui.html
@@ -26,8 +58,8 @@ springdoc:
   api-docs:
     path: /v3/api-docs
   group-configs:
-    - group: 'default'
-      paths-to-match: '/**'
+    - group: "default"
+      paths-to-match: "/**"
       packages-to-scan: com.gen.ai.web
 # knife4j的增强配置，不需要增强可以不配
 knife4j:
@@ -39,7 +71,7 @@ knife4j:
 app:
   storage:
     # root: ${user.home}/data/gen-ai-agent  # 统一根目录，支持跨平台
-    root: ./data/gen-ai-agent  # 统一根目录，支持跨平台
+    root: ./data/gen-ai-agent # 统一根目录，支持跨平台
     chat-history: ${app.storage.root}/history
     rag-docs: ${app.storage.root}/knowledge
     vector-db: ${app.storage.root}/vector-store

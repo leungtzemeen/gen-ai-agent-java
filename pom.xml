@@ -92,6 +92,11 @@
             <groupId>org.springframework.ai</groupId>
             <artifactId>spring-ai-advisors-vector-store</artifactId>
         </dependency>
+        <!-- WiseLink 3.0 MCP Client：官方工件名为 spring-ai-starter-mcp-client（由 spring-ai-bom 管理版本） -->
+        <dependency>
+            <groupId>org.springframework.ai</groupId>
+            <artifactId>spring-ai-starter-mcp-client</artifactId>
+        </dependency>
         <dependency>
             <groupId>org.springdoc</groupId>
             <artifactId>springdoc-openapi-starter-webmvc-ui</artifactId>

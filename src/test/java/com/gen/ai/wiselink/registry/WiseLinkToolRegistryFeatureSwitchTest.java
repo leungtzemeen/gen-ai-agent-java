@@ -10,7 +10,7 @@ import org.springframework.test.context.TestPropertySource;
 /**
  * 校验 {@link com.gen.ai.wiselink.annotation.WiseLinkTool#enabled()}：禁用的工具不出现在注册表中。
  */
-@SpringBootTest
+@SpringBootTest(properties = "spring.ai.mcp.client.enabled=false")
 @TestPropertySource(
         properties = {
             // 满足 DashScope 自动配置占位，避免无密钥时上下文启动失败（本测试不发起真实调用）
