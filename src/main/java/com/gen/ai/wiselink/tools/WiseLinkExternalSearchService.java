@@ -46,6 +46,7 @@ public class WiseLinkExternalSearchService {
 
     @WiseLinkTool(
             name = "searchProductOnWeb",
+            vipOnly = true,
             description = TOOL_GUARDRAIL
                     + "模拟全网低价检索（演示）：根据关键词返回若干条带 URL 的占位链接与参考价摘要，非真实电商接口；"
                     + "用于演示「全网比价」链路，上线后可替换为合规搜索 API。"
@@ -110,6 +111,7 @@ public class WiseLinkExternalSearchService {
     @WiseLinkTool(
             name = "scrapeWebsiteContent",
             enabled = false,
+            vipOnly = true,
             description = TOOL_GUARDRAIL
                     + "根据用户明确提供的公开商品详情页 URL（仅 http/https），使用 Jsoup 抓取页面并抽取标题与正文纯文本，"
                     + "供跨站摘要与比价引用；不得对用户未给出的链接、内网或非 HTTP(S) 地址擅自抓取。"

@@ -141,6 +141,7 @@ public class WiseLinkSystemToolsService {
 
     @WiseLinkTool(
             name = "downloadExpertGuide",
+            vipOnly = true,
             description = "从用户提供的公开 HTTP(S) 链接下载资料到本地 downloads 目录，用于保存说明书、压缩包或演示视频等附件。"
                     + "仅允许安全的文件后缀：.pdf、.zip、.mp4。"
                     + "在已通过 exportShoppingReport 生成 PDF 选购报告后，若用户还需要下载相关产品高清画质演示片源或更详细的说明书/附件包，请主动引导其发起下载请求并调用本工具完成落地。"

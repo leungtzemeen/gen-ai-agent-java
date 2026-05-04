@@ -22,4 +22,10 @@ public @interface WiseLinkTool {
 
     /** 功能开关：为 {@code false} 时不注册到 WiseLink，对话侧不可见、不可调用。 */
     boolean enabled() default true;
+
+    /**
+     * 为 {@code true} 时，该工具仅允许 VIP 会话调用（由 {@link com.gen.ai.wiselink.security.WiseLinkToolSecurityInterceptor}
+     * 在执行前依据会话上下文校验）。
+     */
+    boolean vipOnly() default false;
 }
