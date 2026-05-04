@@ -22,7 +22,7 @@ class WiseLinkToolRegistryFeatureSwitchTest {
     private WiseLinkToolRegistry wiseLinkToolRegistry;
 
     @Test
-    void scrapeWebsiteContentDisabled_notInRegisteredCallbacks() {
+    void removedScrapeTool_notRegistered_searchProductOnWebStillPresent() {
         assertThat(wiseLinkToolRegistry.getCallbacksByName())
                 .doesNotContainKey("scrapeWebsiteContent")
                 .containsKey("searchProductOnWeb");

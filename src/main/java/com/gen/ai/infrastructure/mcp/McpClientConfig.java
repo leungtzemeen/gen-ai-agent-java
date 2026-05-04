@@ -35,6 +35,7 @@ import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.context.ApplicationListener;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.context.annotation.DependsOn;
 
 import com.gen.ai.wiselink.WiseLinkToolFactory;
 
@@ -115,6 +116,11 @@ public class McpClientConfig {
         private static final Path MAP_SERVER_MCP_SANDBOX =
                 Path.of("data", "gen-ai-agent", "mcp-map-sandbox");
 
+        @Bean("wiseLinkMcpStdioProcessManager")
+        WiseLinkMcpStdioProcessManager wiseLinkMcpStdioProcessManager() {
+            return new WiseLinkMcpStdioProcessManager();
+        }
+
         @Bean
         ApplicationListener<ApplicationReadyEvent> wiseLinkMcpToolDiscoveryLogger(
                 SyncMcpToolCallbackProvider syncMcpToolCallbackProvider) {
@@ -155,7 +161,8 @@ public class McpClientConfig {
         List<McpSyncClient> mcpSyncClients(
                 McpSyncClientConfigurer configurer,
                 McpClientCommonProperties commonProperties,
-                ObjectProvider<List<NamedClientMcpTransport>> transportListsProvider) {
+                ObjectProvider<List<NamedClientMcpTransport>> transportListsProvider,
+                WiseLinkMcpStdioProcessManager wiseLinkMcpStdioProcessManager) {
             try {
                 List<NamedClientMcpTransport> transports = transportListsProvider.stream()
                         .filter(Objects::nonNull)
@@ -183,6 +190,7 @@ public class McpClientConfig {
                     if (commonProperties.isInitialized()) {
                         client.initialize();
                     }
+                    wiseLinkMcpStdioProcessManager.registerFromStdioTransport(named.transport());
                     clients.add(client);
                 }
                 return List.copyOf(clients);
@@ -196,6 +204,7 @@ public class McpClientConfig {
         }
 
         @Bean(destroyMethod = "close")
+        @DependsOn("wiseLinkMcpStdioProcessManager")
         McpClientAutoConfiguration.CloseableMcpSyncClients makeSyncClientsClosable(
                 @Qualifier("mcpSyncClients") List<McpSyncClient> clients) {
             return new McpClientAutoConfiguration.CloseableMcpSyncClients(clients);
