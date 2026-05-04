@@ -44,10 +44,14 @@ public class AiShoppingGuideApp {
 
     private static final int STREAM_BACKPRESSURE_BUFFER_SIZE = 1024;
 
-    /** 启发式：更像会触发 WiseLink 工具（PDF/价格/库存/下载等）的提问走阻塞 call，先完整执行工具再一次性返回，避免与流式冲突。 */
+    /**
+     * 启发式：更像会触发工具（含 MCP exportShoppingReport、价格/库存等）的提问走阻塞 {@link #doChat}，先完整执行工具再一次性返回，
+     * 降低多轮记忆 + 纯流式路径下模型漏调工具的概率。
+     */
     private static final Pattern LIKELY_TOOL_QUERY =
             Pattern.compile(
-                    "(导出|PDF|pdf|报告|购物建议书|说明书|下载|库存|价格|多少钱|全网|比价|网页|抓取|记住|意向)",
+                    "(导出|重新导出|再导出|PDF|pdf|选购报告|购物建议书|报告|留档|存档|说明书|下载|库存|价格|多少钱|全网|比价|网页|抓取|记住|意向"
+                            + "|生成\\s*报告|更新\\s*报告|输出\\s*报告|保存\\s*报告|打印\\s*报告)",
                     Pattern.CASE_INSENSITIVE | Pattern.UNICODE_CASE);
 
     private static final String ASSISTANT_GUIDE_VAR_CURRENT_DATE = "current_date";
@@ -106,7 +110,7 @@ public class AiShoppingGuideApp {
                 .prompt()
                 .system(systemMessage)
                 .user(Objects.requireNonNullElse(message, ""))
-                .toolCallbacks(shoppingGuideMergedToolCallbacks.allToolCallbacks())
+                .toolCallbacks(shoppingGuideMergedToolCallbacks.allToolCallbacks(conversationId))
                 .toolContext(Map.of(WiseLinkToolSecurityInterceptor.TOOL_CONTEXT_SESSION_ID_KEY, conversationId))
                 .advisors(spec -> {
                     spec.param(ChatMemory.CONVERSATION_ID, (Object) conversationId);
@@ -150,7 +154,7 @@ public class AiShoppingGuideApp {
                 .prompt()
                 .system(systemMessage)
                 .user(Objects.requireNonNullElse(message, ""))
-                .toolCallbacks(shoppingGuideMergedToolCallbacks.allToolCallbacks())
+                .toolCallbacks(shoppingGuideMergedToolCallbacks.allToolCallbacks(conversationId))
                 .toolContext(Map.of(WiseLinkToolSecurityInterceptor.TOOL_CONTEXT_SESSION_ID_KEY, conversationId))
                 .advisors(spec -> {
                     spec.param(ChatMemory.CONVERSATION_ID, (Object) conversationId);

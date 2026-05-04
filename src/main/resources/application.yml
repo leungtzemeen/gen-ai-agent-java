@@ -54,12 +54,16 @@ spring:
                 # ${AMAP_MAP_KEY} 是你操作系统中配置的环境变量名
                 AMAP_MAPS_API_KEY: ${AMAP_MAP_KEY}
 
+            # wiselink-mcp-ecosystem：由 Spring AI StdioTransportAutoConfiguration 按 command/args 拉起子进程。
+            # WISELINK_MCP_WORKSPACE_ROOT 仅 MCP Server 子进程读取，作为 exports/downloads 等工作区根路径（绝对路径）；
+            # 默认与 app.storage.root 解析结果一致，由 WiseLinkMcpStdioLaunchBeanPostProcessor 写入子进程 env，
+            # 并设置 ProcessBuilder.directory 与之对齐。若需覆盖，可在本连接下增加 env: WISELINK_MCP_WORKSPACE_ROOT: <路径>。
             wiselink-mcp-ecosystem:
               command: java
               args:
                 - "-jar"
-                # 自行修改成wiselink-mcp-ecosystem-0.1.0-SNAPSHOT.jar所在的路径
-                - "D:/wiselink-mcp-ecosystem-0.1.0-SNAPSHOT.jar"
+                # 自行修改成 jar 路径；反斜杠请用单引号包裹，避免双引号内 \t 被 YAML 解析为制表符
+                - 'D:/Projects/leungtzemeen/wiselink-mcp-ecosystem/target/wiselink-mcp-ecosystem-0.1.0-SNAPSHOT.jar'
 
 # springdoc-openapi项目配置
 springdoc:

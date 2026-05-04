@@ -36,6 +36,7 @@ import org.springframework.context.ApplicationListener;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.DependsOn;
+import org.springframework.core.env.Environment;
 
 import com.gen.ai.wiselink.WiseLinkToolFactory;
 
@@ -66,6 +67,16 @@ public class McpClientConfig {
     }
 
     /**
+     * 在 {@link StdioTransportAutoConfiguration} 装配 stdio 传输层前后注入 MCP 子进程环境变量与工作目录（见
+     * {@link WiseLinkMcpStdioLaunchBeanPostProcessor}）。
+     */
+    @Bean
+    @ConditionalOnProperty(prefix = "spring.ai.mcp.client", name = "enabled", havingValue = "true")
+    static WiseLinkMcpStdioLaunchBeanPostProcessor wiseLinkMcpStdioLaunchBeanPostProcessor(Environment environment) {
+        return new WiseLinkMcpStdioLaunchBeanPostProcessor(environment);
+    }
+
+    /**
      * 每次请求重新拉取 MCP 侧 {@link ToolCallback}（与 {@link SyncMcpToolCallbackProvider} 的缓存/刷新策略一致），
      * 再与 WiseLink 本地工具拼接，供 {@link com.gen.ai.application.shopping.AiShoppingGuideApp} 注入使用。
      */
@@ -81,11 +92,17 @@ public class McpClientConfig {
             this.syncMcpToolCallbackProvider = syncMcpToolCallbackProvider;
         }
 
-        public List<ToolCallback> allToolCallbacks() {
+        /**
+         * @param conversationId 当前会话标识，用于合并工具列表的运维日志与 MCP 侧对照；可为 null（记为 default）
+         */
+        public List<ToolCallback> allToolCallbacks(String conversationId) {
+            String cid =
+                    conversationId == null || conversationId.isBlank() ? "default" : conversationId;
             List<ToolCallback> merged = new ArrayList<>(wiseLinkToolFactory.toolCallbacks());
             SyncMcpToolCallbackProvider mcp = syncMcpToolCallbackProvider.getIfAvailable();
             if (mcp == null) {
                 log.debug("MCP ToolCallbackProvider 未注册（spring.ai.mcp.client.enabled=false 或未装配）");
+                logMergedTools(cid, merged);
                 return Collections.unmodifiableList(merged);
             }
             try {
@@ -95,11 +112,23 @@ public class McpClientConfig {
                 }
             } catch (Exception ex) {
                 log.error(
-                        "[WiseLink-MCP] 运行时获取 MCP 工具列表失败，本次请求仅使用 WiseLink 本地工具。原因: {}",
+                        "[WiseLink-MCP] 运行时获取 MCP 工具列表失败，本次请求仅使用 WiseLink 本地工具。conversationId={} 原因: {}",
+                        cid,
                         ex.toString(),
                         ex);
             }
+            logMergedTools(cid, merged);
             return Collections.unmodifiableList(merged);
+        }
+
+        private static void logMergedTools(String conversationId, List<ToolCallback> merged) {
+            String names =
+                    merged.stream().map(cb -> cb.getToolDefinition().name()).collect(Collectors.joining(", "));
+            log.info(
+                    ">>>> [WiseLink-MCP-Tools] mergedToolCallbacks conversationId={} total={} toolNames=[{}]",
+                    conversationId,
+                    merged.size(),
+                    names);
         }
     }
 
