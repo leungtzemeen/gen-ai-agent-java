@@ -46,8 +46,13 @@ spring:
                 - /c
                 - npx
                 - "-y"
-                - "@modelcontextprotocol/server-filesystem"
+                # - "@modelcontextprotocol/server-filesystem"
+                - "@amap/amap-maps-mcp-server"
                 - ./data/gen-ai-agent/mcp-map-sandbox
+              env:
+                # 这里的 AMAP_MAPS_API_KEY 是 Node.js 脚本需要的变量名
+                # ${AMAP_MAP_KEY} 是你操作系统中配置的环境变量名
+                AMAP_MAPS_API_KEY: ${AMAP_MAP_KEY}
 
 # springdoc-openapi项目配置
 springdoc:
