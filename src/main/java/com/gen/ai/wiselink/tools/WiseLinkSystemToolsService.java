@@ -40,10 +40,7 @@ public class WiseLinkSystemToolsService {
     @WiseLinkTool(
             name = "recordUserInterest",
             enabled = false,
-            description = "将用户当前的选购意向以 JSON Lines（每行一条完整 JSON）追加写入本地日志，便于后续会话或运营侧跟进。"
-                    + "当用户明确表达购买意愿或要求你记住某个选择时，请调用此工具进行持久化记录。"
-                    + "请传入用户标识 userId（可为会话 ID、会员号等业务侧 ID）、商品名称 productName、核心诉求摘要 userCoreRequirement。"
-                    + "写入过程使用文件锁与重试，避免并发撕裂。")
+            description = "持久化记录用户选购意向。当用户明确表达购买意愿、确认选购方案或要求‘记住’偏好时调用。参数：userId (会话/会员ID), productName (商品名), userCoreRequirement (诉求摘要)。")
     public String recordUserInterest(RecordUserInterestRequest request) {
         try {
             String uid = request == null || request.userId() == null ? "" : request.userId().trim();

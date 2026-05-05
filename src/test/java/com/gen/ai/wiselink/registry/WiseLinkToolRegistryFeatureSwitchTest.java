@@ -14,7 +14,8 @@ import org.springframework.test.context.TestPropertySource;
 @TestPropertySource(
         properties = {
             // 满足 DashScope 自动配置占位，避免无密钥时上下文启动失败（本测试不发起真实调用）
-            "spring.ai.dashscope.api-key=dummy-key-for-registry-feature-switch-test"
+            "spring.ai.dashscope.api-key=dummy-key-for-registry-feature-switch-test",
+            "spring.ai.openai.api-key=dummy-key-for-registry-feature-switch-test-openai"
         })
 class WiseLinkToolRegistryFeatureSwitchTest {
 

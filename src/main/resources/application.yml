@@ -16,6 +16,15 @@ spring:
       api-key: ${AI_DASHSCOPE_API_KEY}
       # spring.ai.dashscope.chat（含 options.model）见 application-dev.yml，主配置不写入具体模型名。
 
+    # DeepSeek：OpenAI 兼容 Chat API，与百炼 DashScope 并存（spring-ai-starter-model-openai）
+    openai:
+      api-key: ${AI_DEEPSEEK_API_KEY}
+      # 厂商站点 https://deepseek.com ；REST 兼容基址须使用 api 子域
+      base-url: https://api.deepseek.com
+      chat:
+        options:
+          model: deepseek-chat
+
     # MCP Client 配置
     # 开发环境覆盖项（由 application.yml 以 optional 方式导入）
     #
@@ -92,8 +101,8 @@ app:
     chat-history: ${app.storage.root}/history
     rag-docs: ${app.storage.root}/knowledge
     vector-db: ${app.storage.root}/vector-store
-    # RAG相似度阈值
+    # RAG 相似度阈值（越高越严，减少跨品类误召回）
   rag:
-    similarity-threshold: 0.5
+    similarity-threshold: 0.75
   security:
     shadow-words-base64: # 影子词库

@@ -13,7 +13,8 @@ import org.springframework.stereotype.Component;
 import com.gen.ai.wiselink.registry.WiseLinkToolRegistry;
 
 /**
- * WiseLink 2.1 工具权限：按会话标识（sessionId）区分 VIP 与普通用户，对受限工具在执行前拦截。
+ * WiseLink 2.1 工具权限：按会话标识（sessionId）区分 VIP 与普通用户；对受限工具在执行前拦截，
+ * 且对指定工具在非 VIP 会话中从合并后的工具 Schema 中剔除（见 {@link #isVipExclusiveSchemaToolName(String)}）。
  * <p>
  * 会话维度通过 {@link org.springframework.ai.chat.client.ChatClient} 的 {@code toolContext} 传入，
  * 键名使用 {@link #TOOL_CONTEXT_SESSION_ID_KEY}；模型调用工具时由框架传入 {@link ToolContext}。
@@ -57,6 +58,21 @@ public class WiseLinkToolSecurityInterceptor {
         return sessionId.toUpperCase(Locale.ROOT).contains("VIP");
     }
 
+    /**
+     * 仅 VIP 会话应出现在下发给模型的工具列表中的名称（与 {@link #isVipSessionId(String)} 配套）。
+     * <p>
+     * {@code exportShoppingReport} 及其 MCP 带前缀全名使用 {@code contains} 匹配，与导购侧审计逻辑一致。
+     */
+    public static boolean isVipExclusiveSchemaToolName(String toolDefinitionName) {
+        if (toolDefinitionName == null) {
+            return false;
+        }
+        if ("searchProductOnWeb".equals(toolDefinitionName)) {
+            return true;
+        }
+        return toolDefinitionName.contains("exportShoppingReport");
+    }
+
     static String extractSessionId(ToolContext toolContext) {
         if (toolContext == null || toolContext.getContext() == null) {
             return null;
@@ -68,11 +84,6 @@ public class WiseLinkToolSecurityInterceptor {
         String s = Objects.toString(raw, "").trim();
         return s.isEmpty() ? null : s;
     }
-
-    /**
-     * 受限工具描述后缀（供 {@code @WiseLinkTool(description = ...)} 拼接；模型侧可见）。
-     */
-    public static final String TOOL_DESCRIPTION_SECURITY_NOTICE = "注意：此工具受权限控制，非 VIP 会话将调用失败。";
 
     private static final class VipRestrictedToolCallback implements ToolCallback {
 

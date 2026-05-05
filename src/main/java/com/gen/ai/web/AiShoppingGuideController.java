@@ -12,6 +12,7 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import com.gen.ai.application.shopping.AiShoppingGuideApp;
+import com.gen.ai.infrastructure.model.WiseLinkLlmProfile;
 import com.gen.ai.infrastructure.rag.RagDataService;
 
 import io.swagger.v3.oas.annotations.Operation;
@@ -34,12 +35,14 @@ public class AiShoppingGuideController {
     @GetMapping(value = "/chat", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
     @Operation(
             summary = "智能对话（RAG增强，流式）",
-            description = "SSE流式响应：每轮请求在服务端先完成 ChatClient.call（含完整 MCP/WiseLink 工具循环），再以 Flux 单段下发正文，避免纯 token 流式漏调工具。")
+            description = "SSE流式响应：每轮请求在服务端先完成 ChatClient.call（含完整 MCP/WiseLink 工具循环），再以 Flux 单段下发正文，避免纯 token 流式漏调工具。"
+                    + " 可选查询参数 llm：默认百炼 Qwen；传 deepseek 或 ds 时使用 DeepSeek（OpenAI 兼容通道）。")
     public Flux<String> chat(
             @RequestParam("prompt") String prompt,
             @RequestParam(value = "sessionId", defaultValue = "default") String sessionId,
-            @RequestParam(value = "category", required = false) String category) {
-        return aiShoppingGuideApp.doChatStream(prompt, sessionId, category);
+            @RequestParam(value = "category", required = false) String category,
+            @RequestParam(value = "llm", required = false) String llm) {
+        return aiShoppingGuideApp.doChatStream(prompt, sessionId, category, WiseLinkLlmProfile.fromRequestParam(llm));
     }
 
     @PostMapping("/admin/import")

@@ -34,7 +34,9 @@ import org.springframework.test.context.ActiveProfiles;
         properties = {
             "spring.ai.mcp.client.enabled=false",
             // 与主 yml 一致：从环境变量注入，供本类 @Value 与 DashScope 自动配置解析
-            "spring.ai.dashscope.api-key=${AI_DASHSCOPE_API_KEY}"
+            "spring.ai.dashscope.api-key=${AI_DASHSCOPE_API_KEY}",
+            // DeepSeek 通道占位（本类不测 DeepSeek；未设 AI_DEEPSEEK_API_KEY 时避免上下文启动失败）
+            "spring.ai.openai.api-key=${AI_DEEPSEEK_API_KEY:test-placeholder-deepseek}"
         })
 @ActiveProfiles("dev")
 @EnabledIfEnvironmentVariable(named = "AI_DASHSCOPE_API_KEY", matches = ".+")

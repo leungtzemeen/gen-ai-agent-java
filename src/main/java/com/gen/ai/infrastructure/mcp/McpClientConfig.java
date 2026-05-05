@@ -39,6 +39,7 @@ import org.springframework.context.annotation.DependsOn;
 import org.springframework.core.env.Environment;
 
 import com.gen.ai.wiselink.WiseLinkToolFactory;
+import com.gen.ai.wiselink.security.WiseLinkToolSecurityInterceptor;
 
 import io.modelcontextprotocol.client.McpClient;
 import io.modelcontextprotocol.client.McpSyncClient;
@@ -78,7 +79,8 @@ public class McpClientConfig {
 
     /**
      * 每次请求重新拉取 MCP 侧 {@link ToolCallback}（与 {@link SyncMcpToolCallbackProvider} 的缓存/刷新策略一致），
-     * 再与 WiseLink 本地工具拼接，供 {@link com.gen.ai.application.shopping.AiShoppingGuideApp} 注入使用。
+     * 再与 WiseLink 本地工具拼接；非 VIP 会话（{@link WiseLinkToolSecurityInterceptor#isVipSessionId(String)}）
+     * 会从最终列表中移除 {@link WiseLinkToolSecurityInterceptor#isVipExclusiveSchemaToolName(String)} 命中项。
      */
     public static final class ShoppingGuideMergedToolCallbacks {
 
@@ -106,12 +108,16 @@ public class McpClientConfig {
             String cid =
                     conversationId == null || conversationId.isBlank() ? "default" : conversationId;
             String rid = requestTraceId == null || requestTraceId.isBlank() ? "-" : requestTraceId;
+            boolean vipSession = WiseLinkToolSecurityInterceptor.isVipSessionId(conversationId);
             List<ToolCallback> merged = new ArrayList<>(wiseLinkToolFactory.toolCallbacks());
             int wiseLinkCount = merged.size();
             SyncMcpToolCallbackProvider mcp = syncMcpToolCallbackProvider.getIfAvailable();
             if (mcp == null) {
                 log.debug("MCP ToolCallbackProvider 未注册（spring.ai.mcp.client.enabled=false 或未装配）");
-                logMergedTools(cid, rid, merged, wiseLinkCount, 0, false);
+                boolean mcpProvidesExport = false;
+                stripVipExclusiveToolsFromSchemaIfNeeded(merged, cid, rid, vipSession);
+                logMergedTools(
+                        cid, rid, merged, wiseLinkCount, 0, false, vipSession, mcpProvidesExport);
                 return Collections.unmodifiableList(merged);
             }
             int mcpCount = 0;
@@ -142,8 +148,45 @@ public class McpClientConfig {
                         ex.toString(),
                         ex);
             }
-            logMergedTools(cid, rid, merged, wiseLinkCount, mcpCount, mcpFetchFailed);
+            boolean mcpProvidesExportShoppingReport =
+                    merged.stream()
+                            .map(cb -> cb.getToolDefinition().name())
+                            .filter(Objects::nonNull)
+                            .anyMatch(n -> n.contains("exportShoppingReport"));
+            stripVipExclusiveToolsFromSchemaIfNeeded(merged, cid, rid, vipSession);
+            logMergedTools(
+                    cid,
+                    rid,
+                    merged,
+                    wiseLinkCount,
+                    mcpCount,
+                    mcpFetchFailed,
+                    vipSession,
+                    mcpProvidesExportShoppingReport);
             return Collections.unmodifiableList(merged);
+        }
+
+        /**
+         * 非 VIP：从本轮下发列表中物理移除 {@link WiseLinkToolSecurityInterceptor#isVipExclusiveSchemaToolName(String)} 命中项，
+         * 使模型侧 Schema 不含对应工具（省 Token、防误调）。
+         */
+        private static void stripVipExclusiveToolsFromSchemaIfNeeded(
+                List<ToolCallback> merged, String cid, String rid, boolean vipSession) {
+            if (vipSession) {
+                return;
+            }
+            int before = merged.size();
+            merged.removeIf(
+                    cb -> WiseLinkToolSecurityInterceptor.isVipExclusiveSchemaToolName(
+                            cb.getToolDefinition() != null ? cb.getToolDefinition().name() : null));
+            int removed = before - merged.size();
+            if (removed > 0) {
+                log.debug(
+                        ">>>> [WiseLink-MCP-Tools] 非 VIP 会话已从 Schema 剔除受限工具 conversationId={} requestTraceId={} removedCount={}",
+                        cid,
+                        rid,
+                        removed);
+            }
         }
 
         private static void logMergedTools(
@@ -152,18 +195,31 @@ public class McpClientConfig {
                 List<ToolCallback> merged,
                 int wiseLinkToolCount,
                 int mcpToolCount,
-                boolean mcpFetchFailed) {
+                boolean mcpFetchFailed,
+                boolean vipSession,
+                boolean mcpProvidesExportShoppingReport) {
             String names =
                     merged.stream().map(cb -> cb.getToolDefinition().name()).collect(Collectors.joining(", "));
             log.info(
-                    ">>>> [WiseLink-MCP-Tools] mergedToolCallbacks conversationId={} requestTraceId={} total={} wiseLinkToolCount={} mcpToolCount={} mcpFetchFailed={} toolNames=[{}]",
+                    ">>>> [WiseLink-MCP-Tools] mergedToolCallbacks conversationId={} requestTraceId={} vipSession={} total={} wiseLinkToolCount={} mcpToolCount={} mcpFetchFailed={} toolNames=[{}]",
                     conversationId,
                     requestTraceId,
+                    vipSession,
                     merged.size(),
                     wiseLinkToolCount,
                     mcpToolCount,
                     mcpFetchFailed,
                     names);
+            if (vipSession
+                    && !mcpFetchFailed
+                    && mcpToolCount > 0
+                    && !mcpProvidesExportShoppingReport) {
+                log.warn(
+                        ">>>> [WiseLink-MCP-Tools][审计] MCP 已合并 {} 个外部工具，但未发现 exportShoppingReport；无法保证 PDF 物理导出链路。请确认 wiselink-mcp-ecosystem stdio 子进程在线、SyncMcpToolCallbackProvider 列表完整，并核对 ecosystem 侧依赖服务（如 8082）是否就绪。conversationId={} requestTraceId={}",
+                        mcpToolCount,
+                        conversationId,
+                        requestTraceId);
+            }
         }
     }
 

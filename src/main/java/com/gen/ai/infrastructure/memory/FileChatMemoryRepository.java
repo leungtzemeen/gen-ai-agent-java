@@ -23,12 +23,15 @@ import lombok.extern.slf4j.Slf4j;
 
 /**
  * 基于本地目录与 Kryo 序列化的 {@link ChatMemoryRepository} 实现；每个会话对应一个 {@code .kryo} 文件，文件名由 conversationId 经 URL-Safe Base64 编码。
+ * <p>
+ * 可选 {@link ChatMemoryConversationCleaner}：在合并新消息后写盘前、以及按会话读取时，净化列表（与滑动窗口 {@code maxMessages} 配合）。
  */
 @Slf4j
 public class FileChatMemoryRepository implements ChatMemoryRepository {
 
     private final String baseDir;
     private final int lastN;
+    private final ChatMemoryConversationCleaner conversationCleaner;
     private static final Kryo kryo = new Kryo();
 
     static {
@@ -38,11 +41,13 @@ public class FileChatMemoryRepository implements ChatMemoryRepository {
     }
 
     public FileChatMemoryRepository(StorageProperties storageProperties) {
-        this(storageProperties, 10);
+        this(storageProperties, 6, ChatMemoryConversationCleaner.NOOP);
     }
 
-    public FileChatMemoryRepository(StorageProperties storageProperties, int lastN) {
+    public FileChatMemoryRepository(
+            StorageProperties storageProperties, int lastN, ChatMemoryConversationCleaner conversationCleaner) {
         this.lastN = lastN;
+        this.conversationCleaner = conversationCleaner != null ? conversationCleaner : ChatMemoryConversationCleaner.NOOP;
         this.baseDir = storageProperties.getChatHistory();
         if (this.baseDir == null || this.baseDir.isBlank()) {
             throw new IllegalStateException("app.storage.chat-history 未配置，无法初始化 FileChatMemory");
@@ -72,15 +77,17 @@ public class FileChatMemoryRepository implements ChatMemoryRepository {
     
     @Override
     public void saveAll(@NonNull String conversationId, @NonNull List<Message> messages) {
-        List<Message> conversationMessages = getOrCreateConversation(conversationId);
+        List<Message> conversationMessages = new ArrayList<>(getOrCreateConversation(conversationId));
         conversationMessages.addAll(messages);
+        conversationMessages = conversationCleaner.clean(conversationId, conversationMessages);
         saveConversation(conversationId, conversationMessages);
     }
 
     @Override
     @NonNull
     public List<Message> findByConversationId(@NonNull String conversationId) {
-        List<Message> allMessages = getOrCreateConversation(conversationId);
+        List<Message> allMessages = new ArrayList<>(getOrCreateConversation(conversationId));
+        allMessages = conversationCleaner.clean(conversationId, allMessages);
         int fromIndex = Math.max(0, allMessages.size() - lastN);
         return new ArrayList<>(allMessages.subList(fromIndex, allMessages.size()));
     }

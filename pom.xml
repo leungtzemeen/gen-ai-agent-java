@@ -82,6 +82,11 @@
             <groupId>com.alibaba.cloud.ai</groupId>
             <artifactId>spring-ai-alibaba-starter-dashscope</artifactId>
         </dependency>
+        <!-- OpenAI 协议兼容（DeepSeek 等）。Spring AI 1.1 BOM 工件为 spring-ai-starter-model-openai；旧名 spring-ai-openai-spring-boot-starter 已不随 1.1.x 发布。 -->
+        <dependency>
+            <groupId>org.springframework.ai</groupId>
+            <artifactId>spring-ai-starter-model-openai</artifactId>
+        </dependency>
         <dependency>
             <groupId>org.springframework.ai</groupId>
             <artifactId>spring-ai-markdown-document-reader</artifactId>

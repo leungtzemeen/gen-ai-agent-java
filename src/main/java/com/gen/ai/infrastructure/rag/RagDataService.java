@@ -15,6 +15,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.concurrent.CompletableFuture;
+import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 import org.springframework.ai.document.Document;
@@ -34,6 +35,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.util.DigestUtils;
 
 import com.gen.ai.config.StorageProperties;
+import com.gen.ai.rag.RagDocumentTruncatePostProcessor;
 import com.gen.ai.rag.WiseLinkMultiQueryExpander;
 
 import lombok.extern.slf4j.Slf4j;
@@ -61,9 +63,9 @@ public class RagDataService {
     /**
      * RAG 相似度阈值（越大越严格）。
      * <p>
-     * 可通过 yml 配置 {@code app.rag.similarity-threshold} 覆盖，默认 0.5。
+     * 可通过 yml 配置 {@code app.rag.similarity-threshold} 覆盖，默认 0.75（与对话 RAG Advisor 对齐）。
      */
-    @Value("${app.rag.similarity-threshold:0.5}")
+    @Value("${app.rag.similarity-threshold:0.75}")
     private double similarityThreshold;
 
     /**
@@ -314,7 +316,7 @@ public class RagDataService {
     /**
      * 普通检索：不使用 metadata 过滤器。
      * <p>
-     * 同样走 WiseLink 分身检索流程（3 路并行 + 去重）。
+     * 同样走 WiseLink 分身检索流程（2 路并行 + 去重 + 总条数封顶与对话 RAG 一致）。
      */
     public List<Document> similaritySearch(String query) {
         List<Document> results = multiQuerySimilaritySearch(Objects.requireNonNull(query), null);
@@ -348,13 +350,15 @@ public class RagDataService {
                 merged.addAll(batch);
             }
         }
-        return dedupeDocumentsById(merged);
+        return dedupeDocumentsById(merged).stream()
+                .limit(RagDocumentTruncatePostProcessor.MAX_DOCUMENTS_IN_CONTEXT)
+                .collect(Collectors.toCollection(ArrayList::new));
     }
 
     private List<Document> executeSimilaritySearch(String q, Filter.Expression filterExpression) {
         SearchRequest.Builder b = SearchRequest.builder()
                 .query(Objects.requireNonNullElse(q, ""))
-                .topK(5)
+                .topK(2)
                 .similarityThreshold(similarityThreshold);
         if (filterExpression != null) {
             b.filterExpression(filterExpression);
@@ -379,12 +383,7 @@ public class RagDataService {
         if (results != null && !results.isEmpty()) {
             return;
         }
-        // 按你的要求：阈值为 0.5 时输出固定文案，便于检索与对齐。
-        if (Double.compare(similarityThreshold, 0.5d) == 0) {
-            log.info(">>>> [RAG-Search] 未找到相似度大于 0.5 的知识片段。");
-        } else {
-            log.info(">>>> [RAG-Search] 未找到相似度大于 {} 的知识片段。", similarityThreshold);
-        }
+        log.info(">>>> [RAG-Search] 未找到相似度大于 {} 的知识片段。", similarityThreshold);
     }
 
     /**

@@ -16,6 +16,7 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
 import com.gen.ai.infrastructure.memory.FileChatMemoryRepository;
+import com.gen.ai.infrastructure.memory.WiseLinkChatMemoryConversationFilter;
 
 import jakarta.annotation.PostConstruct;
 import lombok.RequiredArgsConstructor;
@@ -40,17 +41,17 @@ public class StorageConfig {
     }
 
     @Bean
-    public ChatMemoryRepository fileChatMemory() {
-        log.info(">>>> [记忆系统] 已挂载本地文件存储 (Kryo版)");
-        return new FileChatMemoryRepository(storageProperties);
+    public ChatMemoryRepository fileChatMemory(WiseLinkChatMemoryConversationFilter wiseLinkChatMemoryConversationFilter) {
+        log.info(">>>> [记忆系统] 已挂载本地文件存储 (Kryo版) + WiseLink 会话净化；单会话读回窗口 lastN=6");
+        return new FileChatMemoryRepository(storageProperties, 6, wiseLinkChatMemoryConversationFilter);
     }
 
     @Bean
     public ChatMemory chatMemory(ChatMemoryRepository repository) {
-        log.info(">>>> [记忆系统] 已挂载 10 条消息窗口记忆管理");
+        log.info(">>>> [记忆系统] 已挂载 6 条消息滑动窗口（约 3 轮问-答）");
         return MessageWindowChatMemory.builder()
                 .chatMemoryRepository(repository)
-                .maxMessages(10) // 对话窗口最多保留的消息条数
+                .maxMessages(6)
                 .build();
     }
 
