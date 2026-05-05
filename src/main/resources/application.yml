@@ -5,6 +5,7 @@ server:
 
 spring:
   config:
+    # 可选加载同目录 application-dev.yml，用于本机模型名、wiselink MCP jar 路径等（见该文件头注释）
     import: optional:classpath:application-dev.yml
   profiles:
     active:
@@ -13,9 +14,7 @@ spring:
     dashscope:
       # 必须通过环境变量注入，禁止在 yml 中填写明文密钥（见 README「配置说明」）
       api-key: ${AI_DASHSCOPE_API_KEY}
-      chat:
-        options:
-          model: qwen-plus
+      # spring.ai.dashscope.chat（含 options.model）见 application-dev.yml，主配置不写入具体模型名。
 
     # MCP Client 配置
     # 开发环境覆盖项（由 application.yml 以 optional 方式导入）
@@ -54,16 +53,18 @@ spring:
                 # ${AMAP_MAP_KEY} 是你操作系统中配置的环境变量名
                 AMAP_MAPS_API_KEY: ${AMAP_MAP_KEY}
 
-            # wiselink-mcp-ecosystem：由 Spring AI StdioTransportAutoConfiguration 按 command/args 拉起子进程。
-            # WISELINK_MCP_WORKSPACE_ROOT 仅 MCP Server 子进程读取，作为 exports/downloads 等工作区根路径（绝对路径）；
-            # 默认与 app.storage.root 解析结果一致，由 WiseLinkMcpStdioLaunchBeanPostProcessor 写入子进程 env，
-            # 并设置 ProcessBuilder.directory 与之对齐。若需覆盖，可在本连接下增加 env: WISELINK_MCP_WORKSPACE_ROOT: <路径>。
-            wiselink-mcp-ecosystem:
-              command: java
-              args:
-                - "-jar"
-                # 自行修改成 jar 路径；反斜杠请用单引号包裹，避免双引号内 \t 被 YAML 解析为制表符
-                - 'D:/Projects/leungtzemeen/wiselink-mcp-ecosystem/target/wiselink-mcp-ecosystem-0.1.0-SNAPSHOT.jar'
+            # --- wiselink-mcp-ecosystem（导购导出 PDF 等）---
+            # 本机 jar 路径、启动参数写在 application-dev.yml，避免每人绝对路径污染主配置。
+            # 样板（复制到 application-dev.yml 的 spring.ai.mcp.client.stdio.connections 下）：
+            #
+            #   wiselink-mcp-ecosystem:
+            #     command: java
+            #     args:
+            #       - "-jar"
+            #       - '../wiselink-mcp-ecosystem/target/wiselink-mcp-ecosystem-0.1.0-SNAPSHOT.jar'
+            #
+            # WISELINK_MCP_WORKSPACE_ROOT 由 WiseLinkMcpStdioLaunchBeanPostProcessor 注入子进程 env，
+            # 并与 ProcessBuilder.directory 对齐；若需覆盖可在该连接下增加 env。
 
 # springdoc-openapi项目配置
 springdoc:

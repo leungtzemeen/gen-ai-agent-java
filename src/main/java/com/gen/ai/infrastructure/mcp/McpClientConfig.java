@@ -96,38 +96,73 @@ public class McpClientConfig {
          * @param conversationId 当前会话标识，用于合并工具列表的运维日志与 MCP 侧对照；可为 null（记为 default）
          */
         public List<ToolCallback> allToolCallbacks(String conversationId) {
+            return allToolCallbacks(conversationId, null);
+        }
+
+        /**
+         * @param requestTraceId 单次请求追踪 ID（短 UUID 等），便于与 MCP / 网关日志串联；可为 null
+         */
+        public List<ToolCallback> allToolCallbacks(String conversationId, String requestTraceId) {
             String cid =
                     conversationId == null || conversationId.isBlank() ? "default" : conversationId;
+            String rid = requestTraceId == null || requestTraceId.isBlank() ? "-" : requestTraceId;
             List<ToolCallback> merged = new ArrayList<>(wiseLinkToolFactory.toolCallbacks());
+            int wiseLinkCount = merged.size();
             SyncMcpToolCallbackProvider mcp = syncMcpToolCallbackProvider.getIfAvailable();
             if (mcp == null) {
                 log.debug("MCP ToolCallbackProvider 未注册（spring.ai.mcp.client.enabled=false 或未装配）");
-                logMergedTools(cid, merged);
+                logMergedTools(cid, rid, merged, wiseLinkCount, 0, false);
                 return Collections.unmodifiableList(merged);
             }
+            int mcpCount = 0;
+            boolean mcpFetchFailed = false;
             try {
                 ToolCallback[] fromMcp = mcp.getToolCallbacks();
                 if (fromMcp != null && fromMcp.length > 0) {
                     merged.addAll(Arrays.asList(fromMcp));
+                    mcpCount = fromMcp.length;
+                } else {
+                    log.warn(
+                            ">>>> [WiseLink-MCP-Tools] MCP SyncMcpToolCallbackProvider 返回空工具列表（本轮仅有本地 WiseLink 工具）。conversationId={} requestTraceId={} wiseLinkToolCount={}",
+                            cid,
+                            rid,
+                            wiseLinkCount);
                 }
             } catch (Exception ex) {
-                log.error(
-                        "[WiseLink-MCP] 运行时获取 MCP 工具列表失败，本次请求仅使用 WiseLink 本地工具。conversationId={} 原因: {}",
+                mcpFetchFailed = true;
+                log.warn(
+                        ">>>> [WiseLink-MCP-Tools] getToolCallbacks 异常，本轮合并降级为仅 WiseLink 本地工具。conversationId={} requestTraceId={}",
                         cid,
+                        rid,
+                        ex);
+                log.error(
+                        "[WiseLink-MCP] 运行时获取 MCP 工具列表失败。conversationId={} requestTraceId={} 原因: {}",
+                        cid,
+                        rid,
                         ex.toString(),
                         ex);
             }
-            logMergedTools(cid, merged);
+            logMergedTools(cid, rid, merged, wiseLinkCount, mcpCount, mcpFetchFailed);
             return Collections.unmodifiableList(merged);
         }
 
-        private static void logMergedTools(String conversationId, List<ToolCallback> merged) {
+        private static void logMergedTools(
+                String conversationId,
+                String requestTraceId,
+                List<ToolCallback> merged,
+                int wiseLinkToolCount,
+                int mcpToolCount,
+                boolean mcpFetchFailed) {
             String names =
                     merged.stream().map(cb -> cb.getToolDefinition().name()).collect(Collectors.joining(", "));
             log.info(
-                    ">>>> [WiseLink-MCP-Tools] mergedToolCallbacks conversationId={} total={} toolNames=[{}]",
+                    ">>>> [WiseLink-MCP-Tools] mergedToolCallbacks conversationId={} requestTraceId={} total={} wiseLinkToolCount={} mcpToolCount={} mcpFetchFailed={} toolNames=[{}]",
                     conversationId,
+                    requestTraceId,
                     merged.size(),
+                    wiseLinkToolCount,
+                    mcpToolCount,
+                    mcpFetchFailed,
                     names);
         }
     }

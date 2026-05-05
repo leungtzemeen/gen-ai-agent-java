@@ -34,7 +34,7 @@ public class AiShoppingGuideController {
     @GetMapping(value = "/chat", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
     @Operation(
             summary = "智能对话（RAG增强，流式）",
-            description = "SSE：按片段推送模型输出；若启发式判定可能触发 WiseLink 工具，则先同步执行工具再以单段文本下发。")
+            description = "SSE流式响应：每轮请求在服务端先完成 ChatClient.call（含完整 MCP/WiseLink 工具循环），再以 Flux 单段下发正文，避免纯 token 流式漏调工具。")
     public Flux<String> chat(
             @RequestParam("prompt") String prompt,
             @RequestParam(value = "sessionId", defaultValue = "default") String sessionId,
