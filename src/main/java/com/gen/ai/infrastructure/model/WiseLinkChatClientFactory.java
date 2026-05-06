@@ -7,6 +7,7 @@ import java.util.Objects;
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.chat.client.advisor.MessageChatMemoryAdvisor;
 import org.springframework.ai.chat.memory.ChatMemory;
+import org.springframework.ai.ollama.OllamaChatModel;
 import org.springframework.ai.openai.OpenAiChatModel;
 import org.springframework.ai.rag.advisor.RetrievalAugmentationAdvisor;
 import org.springframework.stereotype.Component;
@@ -22,6 +23,7 @@ import lombok.extern.slf4j.Slf4j;
  * <ul>
  *   <li>{@link WiseLinkLlmProfile#QWEN} → {@link DashScopeChatModel}（百炼）</li>
  *   <li>{@link WiseLinkLlmProfile#DEEPSEEK} → {@link OpenAiChatModel}（spring.ai.openai / DeepSeek 兼容端点），<b>不得</b>使用 DashScope</li>
+ *   <li>{@link WiseLinkLlmProfile#OLLAMA} → {@link OllamaChatModel}（spring.ai.ollama，本地推理）</li>
  * </ul>
  */
 @Component
@@ -33,11 +35,13 @@ public class WiseLinkChatClientFactory {
     public WiseLinkChatClientFactory(
             DashScopeChatModel dashScopeChatModel,
             OpenAiChatModel openAiChatModel,
+            OllamaChatModel ollamaChatModel,
             ChatMemory chatMemory,
             RetrievalAugmentationAdvisor wiseLinkRetrievalAugmentationAdvisor) {
         Objects.requireNonNull(chatMemory, "chatMemory");
         DashScopeChatModel qwen = Objects.requireNonNull(dashScopeChatModel, "DashScopeChatModel（Qwen）");
         OpenAiChatModel deepSeek = Objects.requireNonNull(openAiChatModel, "OpenAiChatModel（DeepSeek / spring.ai.openai）");
+        OllamaChatModel ollama = Objects.requireNonNull(ollamaChatModel, "OllamaChatModel（本地 Ollama）");
         var memoryAdvisor = MessageChatMemoryAdvisor.builder(chatMemory).build();
         var loggerAdvisor = new AppLoggerAdvisor();
         this.clients.put(
@@ -51,10 +55,16 @@ public class WiseLinkChatClientFactory {
                 ChatClient.builder(deepSeek)
                         .defaultAdvisors(memoryAdvisor, wiseLinkRetrievalAugmentationAdvisor, loggerAdvisor)
                         .build());
+        this.clients.put(
+                WiseLinkLlmProfile.OLLAMA,
+                ChatClient.builder(ollama)
+                        .defaultAdvisors(memoryAdvisor, wiseLinkRetrievalAugmentationAdvisor, loggerAdvisor)
+                        .build());
         log.info(
-                ">>>> [WiseLink-Model] ChatClient 装配：QWEN→{}，DEEPSEEK→{}",
+                ">>>> [WiseLink-Model] ChatClient 装配：QWEN→{}，DEEPSEEK→{}，OLLAMA→{}",
                 qwen.getClass().getSimpleName(),
-                deepSeek.getClass().getSimpleName());
+                deepSeek.getClass().getSimpleName(),
+                ollama.getClass().getSimpleName());
     }
 
     public ChatClient chatClient(WiseLinkLlmProfile profile) {
@@ -66,6 +76,9 @@ public class WiseLinkChatClientFactory {
     void logDeepSeekChannelReady() {
         if (clients.containsKey(WiseLinkLlmProfile.DEEPSEEK)) {
             log.info(">>>> [WiseLink-Model] 成功接入 DeepSeek 通道");
+        }
+        if (clients.containsKey(WiseLinkLlmProfile.OLLAMA)) {
+            log.info(">>>> [WiseLink-Model] 成功接入 Ollama 本地通道");
         }
     }
 }

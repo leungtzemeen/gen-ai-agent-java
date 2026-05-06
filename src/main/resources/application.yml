@@ -25,6 +25,15 @@ spring:
         options:
           model: deepseek-chat
 
+    # 本地 Ollama（WiseLink 5.0 本地大脑）
+    ollama:
+      base-url: http://localhost:11434
+      chat:
+        options:
+          # model: qwen2.5:7b
+          model: qwen2.5:3b
+          # model: qwen2.5:7b-instruct-q4_K_M
+
     # MCP Client 配置
     # 开发环境覆盖项（由 application.yml 以 optional 方式导入）
     #
