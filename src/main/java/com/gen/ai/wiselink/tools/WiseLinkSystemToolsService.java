@@ -39,7 +39,6 @@ public class WiseLinkSystemToolsService {
 
     @WiseLinkTool(
             name = "recordUserInterest",
-            enabled = false,
             description = "持久化记录用户选购意向。当用户明确表达购买意愿、确认选购方案或要求‘记住’偏好时调用。参数：userId (会话/会员ID), productName (商品名), userCoreRequirement (诉求摘要)。")
     public String recordUserInterest(RecordUserInterestRequest request) {
         try {

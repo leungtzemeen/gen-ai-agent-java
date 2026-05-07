@@ -8,6 +8,8 @@ import org.springframework.ai.rag.Query;
 import org.springframework.ai.rag.preretrieval.query.expansion.QueryExpander;
 import org.springframework.util.StringUtils;
 
+import com.gen.ai.infrastructure.manus.ManusRagExpansionBypass;
+
 import lombok.extern.slf4j.Slf4j;
 
 /**
@@ -27,6 +29,10 @@ public final class WiseLinkMultiQueryExpander implements QueryExpander {
 
     @Override
     public List<Query> expand(Query query) {
+        if (ManusRagExpansionBypass.skipMultiQueryExpansion()) {
+            log.debug(">>>> [RAG][WiseLink-分身] Manus OLLAMA 旁路：跳过分身扩展，保持单路检索 query");
+            return List.of(query);
+        }
         List<String> variants = multiQueryExpand(query.text());
         return variants.stream().map(t -> query.mutate().text(t).build()).toList();
     }

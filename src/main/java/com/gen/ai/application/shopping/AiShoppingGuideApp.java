@@ -4,6 +4,7 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
 import java.util.List;
+import java.util.HashMap;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
@@ -23,6 +24,8 @@ import org.springframework.util.StreamUtils;
 import jakarta.annotation.PostConstruct;
 
 import com.gen.ai.common.exception.SensitivePromptException;
+import com.gen.ai.infrastructure.manus.ManusRagExpansionBypass;
+import com.gen.ai.infrastructure.manus.WiseLinkManusEngine;
 import com.gen.ai.infrastructure.mcp.McpClientConfig.ShoppingGuideMergedToolCallbacks;
 import com.gen.ai.infrastructure.model.WiseLinkChatClientFactory;
 import com.gen.ai.infrastructure.model.WiseLinkLlmProfile;
@@ -42,6 +45,10 @@ import reactor.core.scheduler.Schedulers;
  * 通过 RAG Advisor 将 WiseLink RAG 挂入 {@link ChatClient}；
  * 导购入口统一通过 {@link #doChat} 使用 {@link ChatClient#prompt()} {@code .call()}，
  * 以保证与后端之间的完整多轮 tool_calls 循环。
+ * <p>
+ * {@link WiseLinkLlmProfile#OLLAMA}（{@code llm=ollama}）走 {@link com.gen.ai.infrastructure.manus.WiseLinkManusEngine}：
+ * Planning → 文本 ReAct（Thought / Action / Observation），工具由合并后的 {@link ToolCallback} 本地执行并写入会话记忆；
+ * 该路径通过 {@link ManusRagExpansionBypass} 跳过分身检索扩展，其余通道仍使用完整 Modular RAG（含 {@link com.gen.ai.rag.WiseLinkMultiQueryExpander}）。
  */
 @Component
 @Slf4j
@@ -55,15 +62,19 @@ public class AiShoppingGuideApp {
     private final SensitiveWordService sensitiveWordService;
     private final ShoppingGuideMergedToolCallbacks shoppingGuideMergedToolCallbacks;
 
+    private final WiseLinkManusEngine wiseLinkManusEngine;
+
     public AiShoppingGuideApp(
             WiseLinkChatClientFactory chatClientFactory,
             AssistantGuidePromptBundle assistantGuidePromptBundle,
             SensitiveWordService sensitiveWordService,
-            ShoppingGuideMergedToolCallbacks shoppingGuideMergedToolCallbacks) {
+            ShoppingGuideMergedToolCallbacks shoppingGuideMergedToolCallbacks,
+            WiseLinkManusEngine wiseLinkManusEngine) {
         this.chatClientFactory = Objects.requireNonNull(chatClientFactory);
         this.assistantGuidePromptBundle = assistantGuidePromptBundle;
         this.sensitiveWordService = sensitiveWordService;
         this.shoppingGuideMergedToolCallbacks = shoppingGuideMergedToolCallbacks;
+        this.wiseLinkManusEngine = Objects.requireNonNull(wiseLinkManusEngine);
     }
 
     @PostConstruct
@@ -115,7 +126,8 @@ public class AiShoppingGuideApp {
                         toolCallbacks,
                         conversationId,
                         useCategoryFilter,
-                        category);
+                        category,
+                        profile);
 
         return response == null || response.getResult() == null || response.getResult().getOutput() == null
                 ? ""
@@ -129,13 +141,37 @@ public class AiShoppingGuideApp {
             List<ToolCallback> toolCallbacks,
             String conversationId,
             boolean useCategoryFilter,
-            String category) {
+            String category,
+            WiseLinkLlmProfile llmProfile) {
+        Map<String, Object> toolContext = new HashMap<>(2);
+        toolContext.put(WiseLinkToolSecurityInterceptor.TOOL_CONTEXT_SESSION_ID_KEY, conversationId);
+
+        if (llmProfile == WiseLinkLlmProfile.OLLAMA) {
+            log.info(
+                    ">>>> [WiseLink-Manus] OLLAMA 通道启用 Planning + 文本 ReAct 引擎（MCP/WiseLink 工具本地回调执行），conversationId={}",
+                    conversationId);
+            try {
+                ManusRagExpansionBypass.enter();
+                return wiseLinkManusEngine.runShoppingGuideReact(
+                        chatClient,
+                        systemMessage,
+                        userMessage,
+                        toolCallbacks,
+                        conversationId,
+                        useCategoryFilter,
+                        category,
+                        toolContext);
+            } finally {
+                ManusRagExpansionBypass.clear();
+            }
+        }
+
         return chatClient
                 .prompt()
                 .system(systemMessage)
                 .user(userMessage)
                 .toolCallbacks(toolCallbacks)
-                .toolContext(Map.of(WiseLinkToolSecurityInterceptor.TOOL_CONTEXT_SESSION_ID_KEY, conversationId))
+                .toolContext(toolContext)
                 .advisors(spec -> {
                     spec.param(ChatMemory.CONVERSATION_ID, (Object) conversationId);
                     if (useCategoryFilter) {
