@@ -143,8 +143,11 @@ public class AiShoppingGuideApp {
             boolean useCategoryFilter,
             String category,
             WiseLinkLlmProfile llmProfile) {
-        Map<String, Object> toolContext = new HashMap<>(2);
+        Map<String, Object> toolContext = new HashMap<>(4);
         toolContext.put(WiseLinkToolSecurityInterceptor.TOOL_CONTEXT_SESSION_ID_KEY, conversationId);
+        toolContext.put(
+                WiseLinkToolSecurityInterceptor.TOOL_CONTEXT_USER_MESSAGE_KEY,
+                userMessage == null ? "" : userMessage);
 
         if (llmProfile == WiseLinkLlmProfile.OLLAMA) {
             log.info(

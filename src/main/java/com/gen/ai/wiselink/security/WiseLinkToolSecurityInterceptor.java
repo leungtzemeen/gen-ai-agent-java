@@ -25,6 +25,9 @@ public class WiseLinkToolSecurityInterceptor {
     /** 放入 {@code ChatClient.prompt()...toolContext(Map)}，供受限工具执行时读取当前会话 ID。 */
     public static final String TOOL_CONTEXT_SESSION_ID_KEY = "wiseLinkSessionId";
 
+    /** 与 {@link #TOOL_CONTEXT_SESSION_ID_KEY} 一并放入 toolContext，供工具在模型漏传参时回溯用户原话。 */
+    public static final String TOOL_CONTEXT_USER_MESSAGE_KEY = "wiseLinkUserMessage";
+
     private final WiseLinkToolRegistry wiseLinkToolRegistry;
 
     public WiseLinkToolSecurityInterceptor(WiseLinkToolRegistry wiseLinkToolRegistry) {
@@ -67,13 +70,16 @@ public class WiseLinkToolSecurityInterceptor {
         if (toolDefinitionName == null) {
             return false;
         }
-        if ("searchProductOnWeb".equals(toolDefinitionName)) {
+        if ("getProductRealtimeStatus".equals(toolDefinitionName)) {
             return true;
         }
         return toolDefinitionName.contains("exportShoppingReport");
     }
 
-    static String extractSessionId(ToolContext toolContext) {
+    /**
+     * 从 {@link ToolContext} 读取导购会话 ID（与 {@link #TOOL_CONTEXT_SESSION_ID_KEY} 对应）。
+     */
+    public static String extractSessionId(ToolContext toolContext) {
         if (toolContext == null || toolContext.getContext() == null) {
             return null;
         }
@@ -83,6 +89,20 @@ public class WiseLinkToolSecurityInterceptor {
         }
         String s = Objects.toString(raw, "").trim();
         return s.isEmpty() ? null : s;
+    }
+
+    /**
+     * 从 {@link ToolContext} 读取本轮用户原始提问（与 {@link #TOOL_CONTEXT_USER_MESSAGE_KEY} 对应）。
+     */
+    public static String extractUserMessage(ToolContext toolContext) {
+        if (toolContext == null || toolContext.getContext() == null) {
+            return "";
+        }
+        Object raw = toolContext.getContext().get(TOOL_CONTEXT_USER_MESSAGE_KEY);
+        if (raw == null) {
+            return "";
+        }
+        return Objects.toString(raw, "").trim();
     }
 
     private static final class VipRestrictedToolCallback implements ToolCallback {

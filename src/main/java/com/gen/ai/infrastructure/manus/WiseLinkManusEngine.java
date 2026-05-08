@@ -31,7 +31,9 @@ import lombok.extern.slf4j.Slf4j;
 @Slf4j
 public class WiseLinkManusEngine {
 
-    /** 本地 3B 显存与脆弱的 MCP 工具：临时收紧步数上限 */
+    /**
+     * WiseLink 5.16：释放步数上限供长报告；重复调用由提示词 + {@link ManusPromptSupport} 硬约束抑制。
+     */
     private static final int MAX_STEPS = 10;
 
     /** 「只输出 Plan 不输出 Action」时最多自动追问次数，防止无限循环 */
@@ -41,7 +43,7 @@ public class WiseLinkManusEngine {
             "检测到执行异常，请反思是否参数构造有误，或尝试切换到备选执行路径。";
 
     private static final String CIRCUIT_BREAKER_ADVICE =
-            "该工具当前物理故障或参数不兼容，请放弃此步骤，尝试调整 Plan，改用其他工具（如 searchProductOnWeb）获取信息或直接给出最终建议。";
+            "该工具当前物理故障或参数不兼容，请放弃此步骤，尝试调整 Plan，改用 getProductRealtimeStatus 获取公开摘要或直接给出最终建议。";
 
     private final ChatMemory chatMemory;
 
@@ -87,6 +89,7 @@ public class WiseLinkManusEngine {
             String reactSystem =
                     Objects.requireNonNullElse(systemMessage, "")
                             + ManusPromptSupport.REACT_APPEND
+                            + ManusPromptSupport.MANUS_FORCE_CLOSE_APPEND
                             + System.lineSeparator()
                             + System.lineSeparator()
                             + "### Tool catalog"

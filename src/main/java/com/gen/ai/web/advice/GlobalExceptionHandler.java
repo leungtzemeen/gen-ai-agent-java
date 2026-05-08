@@ -5,6 +5,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 
+import com.gen.ai.common.exception.RateLimitException;
 import com.gen.ai.common.exception.SensitivePromptException;
 
 import lombok.extern.slf4j.Slf4j;
@@ -19,6 +20,13 @@ public class GlobalExceptionHandler {
     private static final String SENSITIVE_HINT = "DataInspectionFailed";
 
     private static final String FRIENDLY_REFUSAL = "哎呀，WiseLink 现在的注意力都在导购上呢，这个话题咱们暂时不聊哦，换个宝贝问问吧？";
+
+    @ExceptionHandler(RateLimitException.class)
+    public ResponseEntity<String> handleRateLimitException(RateLimitException ex) {
+        log.warn(">>>> [WiseLink-Guard] 限流熔断: {}", safeMessage(ex));
+        return ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS)
+                .body(ex.getMessage() == null ? "流量触发熔断，请稍后再试或联系管理员" : ex.getMessage());
+    }
 
     @ExceptionHandler(SensitivePromptException.class)
     public ResponseEntity<String> handleSensitivePromptException(SensitivePromptException ex) {

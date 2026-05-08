@@ -4,6 +4,22 @@ server:
     context-path: /api
 
 spring:
+  data:
+    redis:
+      host: ${SPRING_DATA_REDIS_HOST:127.0.0.1}
+      port: ${SPRING_DATA_REDIS_PORT:6379}
+      password: ${SPRING_DATA_REDIS_PASSWORD:}
+      database: ${SPRING_DATA_REDIS_DATABASE:0}
+      timeout: 3s
+      repositories:
+        enabled: false
+      lettuce:
+        pool:
+          enabled: true
+          max-active: 16
+          max-idle: 8
+          min-idle: 2
+          max-wait: 3s
   config:
     # 可选加载同目录 application-dev.yml，用于本机模型名、wiselink MCP jar 路径等（见该文件头注释）
     import: optional:classpath:application-dev.yml
@@ -30,8 +46,8 @@ spring:
       base-url: http://localhost:11434
       chat:
         options:
-          # model: qwen2.5:7b
-          model: qwen2.5:3b
+          model: qwen2.5:7b
+          # model: qwen2.5:3b
           # model: qwen2.5:7b-instruct-q4_K_M
 
     # MCP Client 配置
@@ -115,3 +131,8 @@ app:
     similarity-threshold: 0.75
   security:
     shadow-words-base64: # 影子词库
+  # WiseLink 5.13 搜索引擎密钥配置
+
+  search:
+    tavily-key: ${TAVILY_API_KEY:}
+    serper-key: ${SERPER_API_KEY:}

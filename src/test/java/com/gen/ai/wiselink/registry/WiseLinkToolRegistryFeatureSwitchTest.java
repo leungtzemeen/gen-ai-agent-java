@@ -23,9 +23,10 @@ class WiseLinkToolRegistryFeatureSwitchTest {
     private WiseLinkToolRegistry wiseLinkToolRegistry;
 
     @Test
-    void removedScrapeTool_notRegistered_searchProductOnWebStillPresent() {
+    void removedScrapeTool_notRegistered_unifiedRealtimeSearchRegistered() {
         assertThat(wiseLinkToolRegistry.getCallbacksByName())
                 .doesNotContainKey("scrapeWebsiteContent")
-                .containsKey("searchProductOnWeb");
+                .doesNotContainKey("searchProductOnWeb")
+                .containsKey("getProductRealtimeStatus");
     }
 }

@@ -18,11 +18,11 @@ class ManusToolCallParserTest {
                 Lorem ipsum dolor sit amet. Repeated explanation lines here.
                 ### Action:
                 Optional prose before brace is allowed by relaxed scanning.
-                {"action":"getProductStockFunction","action_input":{"sku":"x"}}
+                {"action":"getProductRealtimeStatus","action_input":{"q":"x"}}
                 """;
         Optional<ManusParsedToolCall> tc = ManusToolCallParser.tryParseToolCall(raw);
         assertThat(tc).isPresent();
-        assertThat(tc.get().toolName()).isEqualTo("getProductStockFunction");
+        assertThat(tc.get().toolName()).isEqualTo("getProductRealtimeStatus");
     }
 
     @Test
@@ -45,12 +45,12 @@ class ManusToolCallParserTest {
                 """
                 Thought: call stock
                 ### Action:
-                {"action":"getProductStockFunction","action_input":{"sku":"abc"}}
+                {"action":"getProductRealtimeStatus","action_input":{"q":"abc"}}
                 """;
         Optional<ManusParsedToolCall> tc = ManusToolCallParser.tryParseToolCall(raw);
         assertThat(tc).isPresent();
-        assertThat(tc.get().toolName()).isEqualTo("getProductStockFunction");
-        assertThat(tc.get().argumentsJson()).contains("sku");
+        assertThat(tc.get().toolName()).isEqualTo("getProductRealtimeStatus");
+        assertThat(tc.get().argumentsJson()).contains("q");
     }
 
     @Test
@@ -109,11 +109,11 @@ class ManusToolCallParserTest {
                 """
                 Thought: mention FINAL_ANSWER: placeholder then tool
                 ### Action:
-                {"action":"getProductPriceFunction","action_input":{"id":"1"}}
+                {"action":"getProductRealtimeStatus","action_input":{"productName":"1"}}
                 """;
         Optional<ManusParsedToolCall> tc = ManusToolCallParser.tryParseToolCall(raw);
         assertThat(tc).isPresent();
-        assertThat(tc.get().toolName()).isEqualTo("getProductPriceFunction");
+        assertThat(tc.get().toolName()).isEqualTo("getProductRealtimeStatus");
     }
 
     @Test
