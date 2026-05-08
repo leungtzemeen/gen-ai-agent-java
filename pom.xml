@@ -31,6 +31,7 @@
         <knife4j.version>4.4.0</knife4j.version>
         <jsonschema-generator.version>4.38.0</jsonschema-generator.version>
         <kryo.version>5.6.2</kryo.version>
+        <hanlp.version>portable-1.8.6</hanlp.version>
     </properties>
 
     <dependencyManagement>
@@ -171,6 +172,12 @@
             <artifactId>hutool-all</artifactId>
             <version>${hutool.version}</version>
         </dependency>
+        <!-- WiseLink 5.19：HanLP portable（版本号即 portable-1.x，内置数据包，Central 发布） -->
+        <dependency>
+            <groupId>com.hankcs</groupId>
+            <artifactId>hanlp</artifactId>
+            <version>${hanlp.version}</version>
+        </dependency>
 
         <dependency>
             <groupId>com.github.xiaoymin</groupId>
@@ -187,6 +194,15 @@
     </dependencies>
 
     <repositories>
+        <!-- HanLP portable 等工件以 Maven Central 为准（部分镜像同步滞后） -->
+        <repository>
+            <id>maven-central</id>
+            <name>Maven Central</name>
+            <url>https://repo.maven.apache.org/maven2</url>
+            <snapshots>
+                <enabled>false</enabled>
+            </snapshots>
+        </repository>
         <repository>
             <id>spring-milestones</id>
             <name>Spring Milestones</name>

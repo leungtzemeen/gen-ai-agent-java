@@ -26,6 +26,9 @@ public class WiseLinkSearchGuard {
 
     private static final String SESSION_KEY_PREFIX = "wiselink:limit:session:";
     private static final String USER_KEY_PREFIX = "wiselink:limit:user:";
+    /** 会话内已执行过物理检索的原子实体（防抖 / 防重复消耗额度） */
+    private static final String FOOTPRINT_KEY_PREFIX = "wiselink:footprint:";
+    private static final Duration FOOTPRINT_TTL = Duration.ofMinutes(30);
     /** 单会话窗口内允许的「消耗配额」的检索次数（略放宽，覆盖两品对比：搜 A、搜 B、收口）。 */
     private static final int SESSION_MAX = 5;
     private static final Duration SESSION_TTL = Duration.ofMinutes(30);
@@ -77,6 +80,47 @@ public class WiseLinkSearchGuard {
                     "hi");
 
     private final RedisTemplate<String, String> redisTemplate;
+
+    /** 归一化实体名，作为 Redis Set member（小写、trim）。 */
+    public static String normalizeFootprintEntity(String entity) {
+        if (entity == null) {
+            return "";
+        }
+        return entity.strip().toLowerCase(Locale.ROOT);
+    }
+
+    /**
+     * 若本会话已对该实体做过物理检索，则返回 true（应跳过再次调用外部搜索，走「数据已在上下文」提示）。
+     */
+    public boolean shouldBlockPhysicalSearch(String sessionId, String entity) {
+        if (!StringUtils.hasText(sessionId) || !StringUtils.hasText(entity)) {
+            return false;
+        }
+        String key = FOOTPRINT_KEY_PREFIX + sessionId.strip();
+        String member = normalizeFootprintEntity(entity);
+        if (!StringUtils.hasText(member)) {
+            return false;
+        }
+        Boolean memberOf = redisTemplate.opsForSet().isMember(key, member);
+        return Boolean.TRUE.equals(memberOf);
+    }
+
+    /** 物理检索成功后写入足迹，与会话窗口 TTL 对齐。 */
+    public void recordEntityFootprint(String sessionId, String entity) {
+        if (!StringUtils.hasText(sessionId) || !StringUtils.hasText(entity)) {
+            return;
+        }
+        String key = FOOTPRINT_KEY_PREFIX + sessionId.strip();
+        String member = normalizeFootprintEntity(entity);
+        if (!StringUtils.hasText(member)) {
+            return;
+        }
+        Long added = redisTemplate.opsForSet().add(key, member);
+        redisTemplate.expire(key, FOOTPRINT_TTL);
+        if (Long.valueOf(1L).equals(added)) {
+            log.debug(">>>> [WiseLink-Guard] 实体足迹写入 sessionId={} entity={}", sessionId.strip(), member);
+        }
+    }
 
     /**
      * 工具链路在命中会话/用户限流时返回给模型的 Observation 全文。
