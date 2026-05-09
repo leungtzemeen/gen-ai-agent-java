@@ -3,12 +3,17 @@ server:
   servlet:
     context-path: /api
 
+wiselink:
+  # 拨码开关：ollama (本地), dashscope (百炼), deepseek (深度求索)
+  active-brain: deepseek
+
 spring:
   config:
     import: optional:classpath:application-dev.yml
   profiles:
     active:
       - dev
+  # 三个模型的配置可以共存，但 Bean 的生命周期会被开关物理阻断
   ai:
     dashscope:
       # 必须通过环境变量注入，禁止在 yml 中填写明文密钥（见 README「配置说明」）
@@ -16,6 +21,21 @@ spring:
       chat:
         options:
           model: qwen-plus
+    # 本地 Ollama（WiseLink 本地大脑）
+    ollama:
+      base-url: http://localhost:11434
+      chat:
+        options:
+          model: qwen2.5:7b
+          # model: qwen2.5:3b
+          # model: qwen2.5:7b-instruct-q4_K_M
+    openai:
+      api-key: ${AI_DEEPSEEK_API_KEY}
+      # 厂商站点 https://deepseek.com ；REST 兼容基址须使用 api 子域
+      base-url: https://api.deepseek.com
+      chat:
+        options:
+          model: deepseek-chat
 
     # MCP Client 配置
     # 开发环境覆盖项（由 application.yml 以 optional 方式导入）
@@ -35,7 +55,7 @@ spring:
         name: wiselink-mcp-client
         type: SYNC
         # 含 MCP initialize 等阶段，过大会阻塞启动；过短可能导致慢速 npx 首次拉包失败（见 McpClientConfig 容错）
-        request-timeout: 5s
+        request-timeout: 10s
         toolcallback:
           enabled: true
         stdio:
@@ -59,7 +79,10 @@ spring:
               args:
                 - "-jar"
                 # 自行修改成wiselink-mcp-ecosystem-0.1.0-SNAPSHOT.jar所在的路径
-                - "D:/wiselink-mcp-ecosystem-0.1.0-SNAPSHOT.jar"
+                - "${WISELINK_MCP_WORKSPACE_ROOT}/target/wiselink-mcp-ecosystem-0.1.0-SNAPSHOT.jar"
+              env:
+                # 子进程工作区根；ecosystem 日志为 {根}/logs/ecosystem.log。未设 OS 环境变量时与 app.storage.root 一致
+                WISELINK_MCP_WORKSPACE_ROOT: ${WISELINK_MCP_WORKSPACE_ROOT:${app.storage.root}}
 
 # springdoc-openapi项目配置
 springdoc:

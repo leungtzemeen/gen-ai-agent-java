@@ -35,7 +35,8 @@ import reactor.core.scheduler.Schedulers;
 /**
  * AI 导购应用入口（Spring 组件）。
  * <p>
- * 通过 {@link RetrievalAugmentationAdvisor} 将 WiseLink RAG（查询压缩改写 → 分身检索 → 上下文注入）挂入 {@link ChatClient}；
+ * 通过 {@link RetrievalAugmentationAdvisor} 将 WiseLink RAG（查询压缩改写 → 分身检索 →
+ * 上下文注入）挂入 {@link ChatClient}；
  * 人设系统提示来自 {@link AssistantGuidePromptBundle}（解析自 {@code assistant-guide.st}）。
  */
 @Component
@@ -45,10 +46,9 @@ public class AiShoppingGuideApp {
     private static final int STREAM_BACKPRESSURE_BUFFER_SIZE = 1024;
 
     /** 启发式：更像会触发 WiseLink 工具（PDF/价格/库存/下载等）的提问走阻塞 call，先完整执行工具再一次性返回，避免与流式冲突。 */
-    private static final Pattern LIKELY_TOOL_QUERY =
-            Pattern.compile(
-                    "(导出|PDF|pdf|报告|购物建议书|说明书|下载|库存|价格|多少钱|全网|比价|网页|抓取|记住|意向)",
-                    Pattern.CASE_INSENSITIVE | Pattern.UNICODE_CASE);
+    private static final Pattern LIKELY_TOOL_QUERY = Pattern.compile(
+            "(导出|PDF|pdf|报告|购物建议书|说明书|下载|库存|价格|多少钱|全网|比价|网页|抓取|记住|意向)",
+            Pattern.CASE_INSENSITIVE | Pattern.UNICODE_CASE);
 
     private static final String ASSISTANT_GUIDE_VAR_CURRENT_DATE = "current_date";
 
@@ -82,7 +82,8 @@ public class AiShoppingGuideApp {
     }
 
     /**
-     * 发起对话，不按品类过滤向量检索（等价于 {@link #doChat(String, String, String)} 且 {@code category} 为 {@code null}）。
+     * 发起对话，不按品类过滤向量检索（等价于 {@link #doChat(String, String, String)} 且
+     * {@code category} 为 {@code null}）。
      */
     public String doChat(String message, String chatId) {
         return doChat(message, chatId, null);
@@ -90,7 +91,8 @@ public class AiShoppingGuideApp {
 
     /**
      * 发起对话：原始用户句直接进入链路，由 {@link RetrievalAugmentationAdvisor} 完成检索增强；
-     * 可选传入 {@code category} 通过 {@link VectorStoreDocumentRetriever#FILTER_EXPRESSION} 做分区过滤。
+     * 可选传入 {@code category} 通过
+     * {@link VectorStoreDocumentRetriever#FILTER_EXPRESSION} 做分区过滤。
      */
     public String doChat(String message, String chatId, String category) {
         if (sensitiveWordService.containsSensitiveWord(message)) {
@@ -206,7 +208,8 @@ public class AiShoppingGuideApp {
             return "运动健康";
         }
         if (p.contains("audio-visual") || p.contains("影音") || p.contains("电视") || p.contains("投影") || p.contains("音响")
-                || p.contains("耳机") || p.contains("家庭影院") || p.contains("4k") || p.contains("hdr") || p.contains("hdmi")) {
+                || p.contains("耳机") || p.contains("家庭影院") || p.contains("4k") || p.contains("hdr")
+                || p.contains("hdmi")) {
             return "影音导购";
         }
         return null;
