@@ -47,10 +47,11 @@ public class StorageConfig {
 
     @Bean
     public ChatMemory chatMemory(ChatMemoryRepository repository) {
-        log.info(">>>> [记忆系统] 已挂载 10 条消息窗口记忆管理");
+        int maxMessages = storageProperties.getMaxMessages();
+        log.info(">>>> [记忆系统] 已挂载 {} 条消息窗口记忆管理", maxMessages);
         return MessageWindowChatMemory.builder()
                 .chatMemoryRepository(repository)
-                .maxMessages(10) // 对话窗口最多保留的消息条数
+                .maxMessages(maxMessages) // 对话窗口最多保留的消息条数
                 .build();
     }
 
@@ -60,7 +61,7 @@ public class StorageConfig {
         String vectorDbPath = storageProperties.getVectorDb();
         SimpleVectorStore vectorStore = SimpleVectorStore.builder(dashscopeEmbeddingModel).build();
 
-        File vectorFile = new File(vectorDbPath);   
+        File vectorFile = new File(vectorDbPath);
         if (vectorFile.exists()) {
             // 启动时自动加载之前存好的知识
             vectorStore.load(vectorFile);

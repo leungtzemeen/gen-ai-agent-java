@@ -110,8 +110,16 @@ app:
     chat-history: ${app.storage.root}/history
     rag-docs: ${app.storage.root}/knowledge
     vector-db: ${app.storage.root}/vector-store
-    # RAG相似度阈值
+  # 内存滑动窗口：控制 AI 脑力开销 (Token 消耗的关键)
+    max-messages: 8
+    # 磁盘持久化：控制档案深度
+    last-n-history: 12
+    # 资产收编：单次工具调用返回的最大字符上限
+    max-observation-chars: 2000
+    # RAG 默认只吐出 2 条黄金背景知识
+    rag-top-k: 2
+  # RAG相似度阈值
   rag:
-    similarity-threshold: 0.5
+    similarity-threshold: 0.75
   security:
     shadow-words-base64: # 影子词库

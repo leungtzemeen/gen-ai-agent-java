@@ -180,7 +180,7 @@ public class AiShoppingGuideApp {
     /** 渲染人设系统提示（替换 {@code assistant-guide.st} 中的日期等变量）。 */
     private String renderAssistantGuideSystemPrompt() {
         String today = LocalDate.now().toString();
-        String rendered = new SystemPromptTemplate(assistantGuidePromptBundle.systemPromptResource())
+        String rendered = new SystemPromptTemplate(assistantGuidePromptBundle.getSystemResource())
                 .createMessage(Map.of(ASSISTANT_GUIDE_VAR_CURRENT_DATE, today))
                 .getText();
         if (rendered != null && rendered.contains("{current_date}")) {

@@ -278,7 +278,7 @@ public class RagDataService {
         // 这里只做“是否存在”的去重判定，因此只取 1 条即可。
         List<Document> matches = vectorStore.similaritySearch(SearchRequest.builder()
                 .query(Objects.requireNonNull(filename))
-                .topK(1)
+                .topK(storageProperties.getDuplicateCheckTopK())
                 .similarityThresholdAll()
                 .filterExpression(Objects.requireNonNull(exp))
                 .build());
@@ -354,7 +354,7 @@ public class RagDataService {
     private List<Document> executeSimilaritySearch(String q, Filter.Expression filterExpression) {
         SearchRequest.Builder b = SearchRequest.builder()
                 .query(Objects.requireNonNullElse(q, ""))
-                .topK(5)
+                .topK(storageProperties.getRagTopK())
                 .similarityThreshold(similarityThreshold);
         if (filterExpression != null) {
             b.filterExpression(filterExpression);

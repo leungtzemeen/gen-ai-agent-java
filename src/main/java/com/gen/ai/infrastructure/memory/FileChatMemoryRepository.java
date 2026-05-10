@@ -38,7 +38,7 @@ public class FileChatMemoryRepository implements ChatMemoryRepository {
     }
 
     public FileChatMemoryRepository(StorageProperties storageProperties) {
-        this(storageProperties, 10);
+        this(storageProperties, storageProperties.getLastNHistory());
     }
 
     public FileChatMemoryRepository(StorageProperties storageProperties, int lastN) {

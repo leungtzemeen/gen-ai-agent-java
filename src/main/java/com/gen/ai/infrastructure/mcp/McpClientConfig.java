@@ -29,30 +29,33 @@ import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.boot.autoconfigure.AutoConfigureAfter;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
-import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.boot.context.event.ApplicationReadyEvent;
+import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.context.ApplicationListener;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.DependsOn;
 
+import com.gen.ai.config.StorageProperties;
 import com.gen.ai.wiselink.WiseLinkToolFactory;
 
 import io.modelcontextprotocol.client.McpClient;
 import io.modelcontextprotocol.client.McpSyncClient;
 import io.modelcontextprotocol.spec.McpSchema;
-
 import lombok.extern.slf4j.Slf4j;
 
 /**
  * WiseLink 3.0 — MCP：外层仅装配与 WiseLink 共存的合并回调；Stdio MCP 客户端与全部 MCP Bean 仅在
- * {@code spring.ai.mcp.client.enabled=true} 时由嵌套配置注册，{@code enabled=false} 时不创建任何 MCP 相关 Bean、
+ * {@code spring.ai.mcp.client.enabled=true} 时由嵌套配置注册，{@code enabled=false}
+ * 时不创建任何 MCP 相关 Bean、
  * 不绑定 {@link McpClientCommonProperties}。
  * <p>
  * SSE / Streamable-HTTP 已在 {@link com.gen.ai.GenAiAgentApplication} 排除；默认
- * {@code McpClientAutoConfiguration} / {@code McpToolCallbackAutoConfiguration} 亦排除，由嵌套类按官方逻辑创建
- * {@link McpSyncClient} 与 {@link SyncMcpToolCallbackProvider}，失败时降级为空实现，主应用继续启动。
+ * {@code McpClientAutoConfiguration} / {@code McpToolCallbackAutoConfiguration}
+ * 亦排除，由嵌套类按官方逻辑创建
+ * {@link McpSyncClient} 与
+ * {@link SyncMcpToolCallbackProvider}，失败时降级为空实现，主应用继续启动。
  */
 @Configuration
 @Slf4j
@@ -61,37 +64,64 @@ public class McpClientConfig {
     @Bean
     ShoppingGuideMergedToolCallbacks shoppingGuideMergedToolCallbacks(
             WiseLinkToolFactory wiseLinkToolFactory,
-            ObjectProvider<SyncMcpToolCallbackProvider> syncMcpToolCallbackProvider) {
-        return new ShoppingGuideMergedToolCallbacks(wiseLinkToolFactory, syncMcpToolCallbackProvider);
+            ObjectProvider<SyncMcpToolCallbackProvider> syncMcpToolCallbackProvider,
+            StorageProperties storageProperties) {
+        return new ShoppingGuideMergedToolCallbacks(wiseLinkToolFactory, syncMcpToolCallbackProvider, storageProperties);
     }
 
     /**
-     * 每次请求重新拉取 MCP 侧 {@link ToolCallback}（与 {@link SyncMcpToolCallbackProvider} 的缓存/刷新策略一致），
-     * 再与 WiseLink 本地工具拼接，供 {@link com.gen.ai.application.shopping.AiShoppingGuideApp} 注入使用。
+     * 每次请求重新拉取 MCP 侧 {@link ToolCallback}（与 {@link SyncMcpToolCallbackProvider}
+     * 的缓存/刷新策略一致），
+     * 再与 WiseLink 本地工具拼接，供
+     * {@link com.gen.ai.application.shopping.AiShoppingGuideApp} 注入使用。
      */
     public static final class ShoppingGuideMergedToolCallbacks {
 
         private final WiseLinkToolFactory wiseLinkToolFactory;
         private final ObjectProvider<SyncMcpToolCallbackProvider> syncMcpToolCallbackProvider;
+        private final StorageProperties storageProperties;
 
         ShoppingGuideMergedToolCallbacks(
                 WiseLinkToolFactory wiseLinkToolFactory,
-                ObjectProvider<SyncMcpToolCallbackProvider> syncMcpToolCallbackProvider) {
+                ObjectProvider<SyncMcpToolCallbackProvider> syncMcpToolCallbackProvider,
+                StorageProperties storageProperties) {
             this.wiseLinkToolFactory = wiseLinkToolFactory;
             this.syncMcpToolCallbackProvider = syncMcpToolCallbackProvider;
+            this.storageProperties = storageProperties;
         }
 
         public List<ToolCallback> allToolCallbacks() {
-            List<ToolCallback> merged = new ArrayList<>(wiseLinkToolFactory.toolCallbacks());
+            // 提取动态字符上限熔断阈值（如1500字符）
+            int maxChars = storageProperties.getMaxObservationChars();
+            List<ToolCallback> rawMerged = new ArrayList<>();
+
+            // A. 处理 WiseLink 本地原生工具，原地套上脱水包装
+            if (wiseLinkToolFactory != null && wiseLinkToolFactory.toolCallbacks() != null) {
+                for (ToolCallback localTool : wiseLinkToolFactory.toolCallbacks()) {
+                    rawMerged.add(new TruncationToolCallback(localTool, maxChars));
+                }
+            }
+
             SyncMcpToolCallbackProvider mcp = syncMcpToolCallbackProvider.getIfAvailable();
             if (mcp == null) {
                 log.debug("MCP ToolCallbackProvider 未注册（spring.ai.mcp.client.enabled=false 或未装配）");
-                return Collections.unmodifiableList(merged);
+                return Collections.unmodifiableList(rawMerged);
             }
+
             try {
                 ToolCallback[] fromMcp = mcp.getToolCallbacks();
                 if (fromMcp != null && fromMcp.length > 0) {
-                    merged.addAll(Arrays.asList(fromMcp));
+                    // B. 核心：处理 Stdio 管道探测出来的外部子进程工具（高德/8082）
+                    for (ToolCallback rawMcpTool : fromMcp) {
+                        if (rawMcpTool != null) {
+                            // 无差别穿上物理熔断外壳
+                            ToolCallback securedMcpTool = new TruncationToolCallback(rawMcpTool, maxChars);
+                            rawMerged.add(securedMcpTool);
+
+                            log.debug(">>>> [MCP-Dynamic-Secure] 成功为运行时 MCP 工具 [{}] 挂载 {} 字符限制保护罩",
+                                    rawMcpTool.getToolDefinition().name(), maxChars);
+                        }
+                    }
                 }
             } catch (Exception ex) {
                 log.error(
@@ -99,12 +129,16 @@ public class McpClientConfig {
                         ex.toString(),
                         ex);
             }
-            return Collections.unmodifiableList(merged);
+
+            log.info(">>>> [WiseLink-Tools-Truncation] 全链路工具脱水完毕，交付给 AI 的只读工具总计: {} 个", rawMerged.size());
+            // 继续保持你体面的只读防御逻辑，返回安全的、全量挂载滤网的工具列表
+            return Collections.unmodifiableList(rawMerged);
         }
     }
 
     /**
-     * {@code spring.ai.mcp.client.enabled=true} 时整组注册；为 false 时本配置类不解析，实现 MCP 侧「零 Bean」。
+     * {@code spring.ai.mcp.client.enabled=true} 时整组注册；为 false 时本配置类不解析，实现 MCP 侧「零
+     * Bean」。
      */
     @Configuration(proxyBeanMethods = false)
     @ConditionalOnProperty(prefix = "spring.ai.mcp.client", name = "enabled", havingValue = "true")
@@ -113,8 +147,7 @@ public class McpClientConfig {
     @Slf4j
     static class WiseLinkStdioMcpBeans {
 
-        private static final Path MAP_SERVER_MCP_SANDBOX =
-                Path.of("data", "gen-ai-agent", "mcp-map-sandbox");
+        private static final Path MAP_SERVER_MCP_SANDBOX = Path.of("data", "gen-ai-agent", "mcp-map-sandbox");
 
         @Bean("wiseLinkMcpStdioProcessManager")
         WiseLinkMcpStdioProcessManager wiseLinkMcpStdioProcessManager() {
@@ -169,12 +202,13 @@ public class McpClientConfig {
                         .flatMap(Collection::stream)
                         .toList();
                 if (transports.isEmpty()) {
-                    log.warn("[WiseLink-MCP] 未注册任何 NamedClientMcpTransport（请检查 spring.ai.mcp.client.stdio.connections）");
+                    log.warn(
+                            "[WiseLink-MCP] 未注册任何 NamedClientMcpTransport（请检查 spring.ai.mcp.client.stdio.connections）");
                     return List.of();
                 }
 
-                Duration requestTimeout =
-                        Objects.requireNonNullElse(commonProperties.getRequestTimeout(), Duration.ofSeconds(5));
+                Duration requestTimeout = Objects.requireNonNullElse(commonProperties.getRequestTimeout(),
+                        Duration.ofSeconds(5));
                 String implName = Objects.requireNonNullElse(commonProperties.getName(), "wiselink-mcp-client");
                 String implVersion = Objects.requireNonNullElse(commonProperties.getVersion(), "1.0.0");
 
