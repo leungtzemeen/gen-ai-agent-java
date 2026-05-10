@@ -10,6 +10,7 @@ import java.util.Collection;
 import java.util.Collections;
 import java.util.List;
 import java.util.Objects;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Collectors;
 
 import org.springframework.ai.mcp.McpToolFilter;
@@ -38,7 +39,10 @@ import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.DependsOn;
 
 import com.gen.ai.config.StorageProperties;
+import com.gen.ai.infrastructure.tool.PerRequestToolBudgetToolCallback;
+import com.gen.ai.infrastructure.tool.ToolCallbackComposition;
 import com.gen.ai.wiselink.WiseLinkToolFactory;
+import com.gen.ai.wiselink.security.tool.VipRestrictedToolCallback;
 
 import io.modelcontextprotocol.client.McpClient;
 import io.modelcontextprotocol.client.McpSyncClient;
@@ -74,6 +78,9 @@ public class McpClientConfig {
      * 的缓存/刷新策略一致），
      * 再与 WiseLink 本地工具拼接，供
      * {@link com.gen.ai.application.shopping.AiShoppingGuideApp} 注入使用。
+     * <p>
+     * {@link #allToolCallbacks(AtomicInteger)} 的计数器须在单次 {@code ChatClient} 调用链内复用，以实现「本请求
+     * 工具 leaf 总次数」上限。
      */
     public static final class ShoppingGuideMergedToolCallbacks {
 
@@ -90,15 +97,23 @@ public class McpClientConfig {
             this.storageProperties = storageProperties;
         }
 
-        public List<ToolCallback> allToolCallbacks() {
-            // 提取动态字符上限熔断阈值（如1500字符）
+        public List<ToolCallback> allToolCallbacks(AtomicInteger perRequestToolInvocations) {
+            Objects.requireNonNull(perRequestToolInvocations, "perRequestToolInvocations");
             int maxChars = storageProperties.getMaxObservationChars();
+            //调用工具次数上限
+            int maxInvocations = storageProperties.getMaxToolInvocationsPerRequest();
+            //是否启用预算保护  
+            boolean budgetOn = maxInvocations > 0;
+            //预算超限提示
+            String budgetNotice = PerRequestToolBudgetToolCallback.BUDGET_EXCEEDED_NOTICE;
+            //合并后的工具列表
             List<ToolCallback> rawMerged = new ArrayList<>();
-
-            // A. 处理 WiseLink 本地原生工具，原地套上脱水包装
+            //本地工具(包括普通工具和VIP工具)
             if (wiseLinkToolFactory != null && wiseLinkToolFactory.toolCallbacks() != null) {
                 for (ToolCallback localTool : wiseLinkToolFactory.toolCallbacks()) {
-                    rawMerged.add(new TruncationToolCallback(localTool, maxChars));
+                    rawMerged.add(
+                        //包装本地工具
+                            wrapLocalTool(localTool, perRequestToolInvocations, maxChars, budgetOn, maxInvocations, budgetNotice));
                 }
             }
 
@@ -111,15 +126,16 @@ public class McpClientConfig {
             try {
                 ToolCallback[] fromMcp = mcp.getToolCallbacks();
                 if (fromMcp != null && fromMcp.length > 0) {
-                    // B. 核心：处理 Stdio 管道探测出来的外部子进程工具（高德/8082）
+                    // B. MCP 工具：Truncation(Budget(leaf))（无 VIP 壳）
                     for (ToolCallback rawMcpTool : fromMcp) {
                         if (rawMcpTool != null) {
-                            // 无差别穿上物理熔断外壳
-                            ToolCallback securedMcpTool = new TruncationToolCallback(rawMcpTool, maxChars);
+                            ToolCallback securedMcpTool = wrapMcpTool(
+                                    rawMcpTool, perRequestToolInvocations, maxChars, budgetOn, maxInvocations, budgetNotice);
                             rawMerged.add(securedMcpTool);
 
-                            log.debug(">>>> [MCP-Dynamic-Secure] 成功为运行时 MCP 工具 [{}] 挂载 {} 字符限制保护罩",
-                                    rawMcpTool.getToolDefinition().name(), maxChars);
+                            log.debug(
+                                    ">>>> [MCP-Dynamic-Secure] 成功为运行时 MCP 工具 [{}] 挂载截断/预算保护",
+                                    rawMcpTool.getToolDefinition().name());
                         }
                     }
                 }
@@ -130,9 +146,50 @@ public class McpClientConfig {
                         ex);
             }
 
-            log.info(">>>> [WiseLink-Tools-Truncation] 全链路工具脱水完毕，交付给 AI 的只读工具总计: {} 个", rawMerged.size());
-            // 继续保持你体面的只读防御逻辑，返回安全的、全量挂载滤网的工具列表
+            log.info(">>>> [WiseLink-Tools] 全链路工具装配完毕，交付给 AI 的只读工具总计: {} 个", rawMerged.size());
             return Collections.unmodifiableList(rawMerged);
+        }
+
+        //包装本地工具
+        private static ToolCallback wrapLocalTool(
+                ToolCallback localTool,
+                AtomicInteger perRequestToolInvocations,
+                int maxChars,
+                boolean budgetOn,
+                int maxInvocations,
+                String budgetNotice) {
+            if (!budgetOn) {
+                //不启用预算保护，只进行截断
+                return ToolCallbackComposition.compose(localTool, ToolCallbackComposition.truncation(maxChars));
+            }
+            //装饰者:
+            // 最里的那一层：预算 PerRequestToolBudgetToolCallback
+            // 中间的那一层：VIP装饰 VipRestrictedToolCallback
+            // 最外的那一层：截断 TruncationToolCallback
+            //剥离VIP装饰
+            ToolCallback rawLeaf = VipRestrictedToolCallback.unwrapVipDelegateOrSelf(localTool);
+            //创建预算保护工具
+            ToolCallback budgeted =
+                    new PerRequestToolBudgetToolCallback(rawLeaf, perRequestToolInvocations, maxInvocations, budgetNotice);
+            //重新包装VIP装饰
+            ToolCallback withVip = VipRestrictedToolCallback.wrapWithVipIfMatches(budgeted, localTool);
+            //重新包装截断装饰
+            return ToolCallbackComposition.compose(withVip, ToolCallbackComposition.truncation(maxChars));
+        }
+
+        private static ToolCallback wrapMcpTool(
+                ToolCallback rawMcpTool,
+                AtomicInteger perRequestToolInvocations,
+                int maxChars,
+                boolean budgetOn,
+                int maxInvocations,
+                String budgetNotice) {
+            if (!budgetOn) {
+                return ToolCallbackComposition.compose(rawMcpTool, ToolCallbackComposition.truncation(maxChars));
+            }
+            ToolCallback budgeted =
+                    new PerRequestToolBudgetToolCallback(rawMcpTool, perRequestToolInvocations, maxInvocations, budgetNotice);
+            return ToolCallbackComposition.compose(budgeted, ToolCallbackComposition.truncation(maxChars));
         }
     }
 

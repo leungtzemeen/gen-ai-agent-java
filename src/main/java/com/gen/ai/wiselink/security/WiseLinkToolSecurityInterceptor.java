@@ -7,16 +7,17 @@ import java.util.stream.Collectors;
 
 import org.springframework.ai.chat.model.ToolContext;
 import org.springframework.ai.tool.ToolCallback;
-import org.springframework.ai.tool.definition.ToolDefinition;
 import org.springframework.stereotype.Component;
 
 import com.gen.ai.wiselink.registry.WiseLinkToolRegistry;
+import com.gen.ai.wiselink.security.tool.VipRestrictedToolCallback;
 
 /**
  * WiseLink 2.1 工具权限：按会话标识（sessionId）区分 VIP 与普通用户，对受限工具在执行前拦截。
  * <p>
  * 会话维度通过 {@link org.springframework.ai.chat.client.ChatClient} 的 {@code toolContext} 传入，
  * 键名使用 {@link #TOOL_CONTEXT_SESSION_ID_KEY}；模型调用工具时由框架传入 {@link ToolContext}。
+ * 具体装饰实现见 {@link VipRestrictedToolCallback}。
  */
 @Component
 public class WiseLinkToolSecurityInterceptor {
@@ -57,7 +58,8 @@ public class WiseLinkToolSecurityInterceptor {
         return sessionId.toUpperCase(Locale.ROOT).contains("VIP");
     }
 
-    static String extractSessionId(ToolContext toolContext) {
+    /** 供 {@link VipRestrictedToolCallback} 等读取当前会话；对 {@link ToolContext} 为 null 时返回 null。 */
+    public static String extractSessionId(ToolContext toolContext) {
         if (toolContext == null || toolContext.getContext() == null) {
             return null;
         }
@@ -73,37 +75,4 @@ public class WiseLinkToolSecurityInterceptor {
      * 受限工具描述后缀（供 {@code @WiseLinkTool(description = ...)} 拼接；模型侧可见）。
      */
     public static final String TOOL_DESCRIPTION_SECURITY_NOTICE = "注意：此工具受权限控制，非 VIP 会话将调用失败。";
-
-    private static final class VipRestrictedToolCallback implements ToolCallback {
-
-        private final ToolCallback delegate;
-
-        VipRestrictedToolCallback(ToolCallback delegate) {
-            this.delegate = delegate;
-        }
-
-        @Override
-        public ToolDefinition getToolDefinition() {
-            return delegate.getToolDefinition();
-        }
-
-        @Override
-        public String call(String toolInput) {
-            return call(toolInput, null);
-        }
-
-        @Override
-        public String call(String toolInput, ToolContext toolContext) {
-            String sessionId = extractSessionId(toolContext);
-            if (!isVipSessionId(sessionId)) {
-                return VIP_DENIED_MESSAGE;
-            }
-            return delegate.call(toolInput, toolContext);
-        }
-
-        @Override
-        public String toString() {
-            return "VipRestrictedToolCallback{" + delegate + "}";
-        }
-    }
 }

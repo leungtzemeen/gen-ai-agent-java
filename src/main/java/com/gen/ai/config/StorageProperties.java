@@ -51,6 +51,11 @@ public class StorageProperties {
      */
      private int maxObservationChars = 1500;
 
+    /**
+     * 单次 ChatClient 调用（含多轮 model↔tool）内，所有工具真实 leaf 执行次数上限（成功或异常均计数）。
+     */
+    private int maxToolInvocationsPerRequest = 32;
+
      // --- 资产收编：知识库（RAG）极致瘦身参数（彻底消灭魔法值） ---
     /**
      * 单次 RAG 知识检索允许带回的最相关文档条数 (Top-K)

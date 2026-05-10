@@ -5,6 +5,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.regex.Pattern;
 
 import org.springframework.ai.chat.client.ChatClient;
@@ -104,11 +105,12 @@ public class AiShoppingGuideApp {
         String conversationId = (chatId == null || chatId.isBlank()) ? "default" : chatId;
         boolean useCategoryFilter = category != null && !category.isBlank();
 
+        AtomicInteger perRequestToolInvocations = new AtomicInteger(0);
         ChatResponse response = chatClient
                 .prompt()
                 .system(systemMessage)
                 .user(Objects.requireNonNullElse(message, ""))
-                .toolCallbacks(shoppingGuideMergedToolCallbacks.allToolCallbacks())
+                .toolCallbacks(shoppingGuideMergedToolCallbacks.allToolCallbacks(perRequestToolInvocations))
                 .toolContext(Map.of(WiseLinkToolSecurityInterceptor.TOOL_CONTEXT_SESSION_ID_KEY, conversationId))
                 .advisors(spec -> {
                     spec.param(ChatMemory.CONVERSATION_ID, (Object) conversationId);
@@ -148,11 +150,12 @@ public class AiShoppingGuideApp {
         String conversationId = (chatId == null || chatId.isBlank()) ? "default" : chatId;
         boolean useCategoryFilter = category != null && !category.isBlank();
 
+        AtomicInteger perRequestToolInvocations = new AtomicInteger(0);
         Flux<String> tokens = chatClient
                 .prompt()
                 .system(systemMessage)
                 .user(Objects.requireNonNullElse(message, ""))
-                .toolCallbacks(shoppingGuideMergedToolCallbacks.allToolCallbacks())
+                .toolCallbacks(shoppingGuideMergedToolCallbacks.allToolCallbacks(perRequestToolInvocations))
                 .toolContext(Map.of(WiseLinkToolSecurityInterceptor.TOOL_CONTEXT_SESSION_ID_KEY, conversationId))
                 .advisors(spec -> {
                     spec.param(ChatMemory.CONVERSATION_ID, (Object) conversationId);

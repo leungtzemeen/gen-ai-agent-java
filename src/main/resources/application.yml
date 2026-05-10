@@ -115,7 +115,9 @@ app:
     # 磁盘持久化：控制档案深度
     last-n-history: 12
     # 资产收编：单次工具调用返回的最大字符上限
-    max-observation-chars: 2000
+    max-observation-chars: 8000
+    # 单次对话请求内，所有工具真实执行次数之和上限（成功或 leaf 异常均计数）
+    max-tool-invocations-per-request: 5
     # RAG 默认只吐出 2 条黄金背景知识
     rag-top-k: 2
   # RAG相似度阈值
