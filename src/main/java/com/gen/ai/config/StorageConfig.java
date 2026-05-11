@@ -35,8 +35,9 @@ public class StorageConfig {
     @PostConstruct
     public void init() {
         log.info(">>>> [存储系统] 正在初始化文件目录...");
-        createDirIfConfigured(storageProperties.getChatHistory());
-        createDirIfConfigured(storageProperties.getRagDocs());
+        createDirIfConfigured(storageProperties.getStorage().getChatHistory());
+        createDirIfConfigured(storageProperties.getStorage().getRagDocs());
+        createDirIfConfigured(storageProperties.getStorage().getMcpMapSandbox());
     }
 
     @Bean
@@ -47,7 +48,7 @@ public class StorageConfig {
 
     @Bean
     public ChatMemory chatMemory(ChatMemoryRepository repository) {
-        int maxMessages = storageProperties.getMaxMessages();
+        int maxMessages = storageProperties.getStorage().getMaxMessages();
         log.info(">>>> [记忆系统] 已挂载 {} 条消息窗口记忆管理", maxMessages);
         return MessageWindowChatMemory.builder()
                 .chatMemoryRepository(repository)
@@ -58,7 +59,7 @@ public class StorageConfig {
     @Bean
     public VectorStore vectorStore(EmbeddingModel dashscopeEmbeddingModel) {
         // 这是一个本地文件版的向量数据库，它会把索引存在你配置的 vector-db 路径下
-        String vectorDbPath = storageProperties.getVectorDb();
+        String vectorDbPath = storageProperties.getStorage().getVectorDb();
         SimpleVectorStore vectorStore = SimpleVectorStore.builder(dashscopeEmbeddingModel).build();
 
         File vectorFile = new File(vectorDbPath);

@@ -51,7 +51,6 @@ public class WiseLinkRagAdvisorConfig {
                         ChatClient.Builder chatClientBuilder,
                         VectorStore vectorStore,
                         WiseLinkMultiQueryExpander wiseLinkMultiQueryExpander,
-                        @Value("${app.rag.similarity-threshold}") double similarityThreshold,
                         WiseLinkPromptRegistry registry,
                         StorageProperties storageProperties) {
 
@@ -64,8 +63,8 @@ public class WiseLinkRagAdvisorConfig {
 
                 VectorStoreDocumentRetriever retriever = VectorStoreDocumentRetriever.builder()
                                 .vectorStore(vectorStore)
-                                .similarityThreshold(similarityThreshold)
-                                .topK(storageProperties.getRagTopK())
+                                .similarityThreshold(storageProperties.getStorage().getSimilarityThreshold())
+                                .topK(storageProperties.getStorage().getRagTopK())
                                 .build();
 
                 ContextualQueryAugmenter augmenter = ContextualQueryAugmenter.builder()

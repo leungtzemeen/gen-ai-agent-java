@@ -5,15 +5,15 @@ import java.util.Base64;
 import java.util.List;
 import java.util.Objects;
 
-import jakarta.annotation.PostConstruct;
-
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.core.io.Resource;
 import org.springframework.stereotype.Service;
 
 import com.gen.ai.config.AppSecurityProperties;
+import com.gen.ai.config.StorageProperties;
 
 import cn.hutool.dfa.WordTree;
+import jakarta.annotation.PostConstruct;
 import lombok.extern.slf4j.Slf4j;
 
 /**
@@ -24,7 +24,7 @@ import lombok.extern.slf4j.Slf4j;
 public class SensitiveWordService {
 
     private final WordTree wordTree = new WordTree();
-    private final AppSecurityProperties appSecurityProperties;
+    private final StorageProperties storageProperties;
 
     /**
      * 路 A（公开词）：从 classpath 读取“混淆词库”，用于放置普通“广告词/水军词”等非敏感但需要拦截的词条。
@@ -34,10 +34,10 @@ public class SensitiveWordService {
     private final Resource sensitiveWordsBinResource;
 
     public SensitiveWordService(
-            AppSecurityProperties appSecurityProperties,
+         StorageProperties storageProperties,
             @Value("classpath:/sensitive_words.bin") Resource sensitiveWordsBinResource) {
-        this.appSecurityProperties = Objects.requireNonNull(appSecurityProperties, "appSecurityProperties");
-        this.sensitiveWordsBinResource = sensitiveWordsBinResource;
+        this.storageProperties = Objects.requireNonNull(storageProperties, "storageProperties");
+        this.sensitiveWordsBinResource = Objects.requireNonNull(sensitiveWordsBinResource, "sensitiveWordsBinResource");
     }
 
     @PostConstruct
@@ -91,7 +91,7 @@ public class SensitiveWordService {
      * 路 B（影子词）：从 {@link AppSecurityProperties#getShadowWordsBase64()} 读取 Base64 词条并解码入库。
      */
     private int loadShadowWordsFromBase64() {
-        List<String> shadowWords = appSecurityProperties.getShadowWordsBase64();
+        List<String> shadowWords = storageProperties.getSecurity().getShadowWordsBase64();
         if (shadowWords == null || shadowWords.isEmpty()) {
             log.info(">>>> [Security] 未配置 app.security.shadow-words-base64，已跳过影子词加载");
             return 0;

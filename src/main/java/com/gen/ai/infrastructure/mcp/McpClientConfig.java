@@ -1,8 +1,5 @@
 package com.gen.ai.infrastructure.mcp;
 
-import java.io.IOException;
-import java.nio.file.Files;
-import java.nio.file.Path;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -99,9 +96,9 @@ public class McpClientConfig {
 
         public List<ToolCallback> allToolCallbacks(AtomicInteger perRequestToolInvocations) {
             Objects.requireNonNull(perRequestToolInvocations, "perRequestToolInvocations");
-            int maxChars = storageProperties.getMaxObservationChars();
+            int maxChars = storageProperties.getStorage().getMaxObservationChars();
             //调用工具次数上限
-            int maxInvocations = storageProperties.getMaxToolInvocationsPerRequest();
+            int maxInvocations = storageProperties.getStorage().getMaxToolInvocationsPerRequest();
             //是否启用预算保护  
             boolean budgetOn = maxInvocations > 0;
             //预算超限提示
@@ -200,11 +197,10 @@ public class McpClientConfig {
     @Configuration(proxyBeanMethods = false)
     @ConditionalOnProperty(prefix = "spring.ai.mcp.client", name = "enabled", havingValue = "true")
     @AutoConfigureAfter(StdioTransportAutoConfiguration.class)
+    @DependsOn("storageConfig")
     @EnableConfigurationProperties(McpClientCommonProperties.class)
     @Slf4j
     static class WiseLinkStdioMcpBeans {
-
-        private static final Path MAP_SERVER_MCP_SANDBOX = Path.of("data", "gen-ai-agent", "mcp-map-sandbox");
 
         @Bean("wiseLinkMcpStdioProcessManager")
         WiseLinkMcpStdioProcessManager wiseLinkMcpStdioProcessManager() {
@@ -215,12 +211,6 @@ public class McpClientConfig {
         ApplicationListener<ApplicationReadyEvent> wiseLinkMcpToolDiscoveryLogger(
                 SyncMcpToolCallbackProvider syncMcpToolCallbackProvider) {
             return event -> {
-                try {
-                    Files.createDirectories(MAP_SERVER_MCP_SANDBOX);
-                } catch (IOException ex) {
-                    log.warn("[WiseLink-MCP] 无法创建 map-server 沙箱目录 {}: {}", MAP_SERVER_MCP_SANDBOX, ex.getMessage());
-                }
-
                 try {
                     ToolCallback[] tools = syncMcpToolCallbackProvider.getToolCallbacks();
                     if (tools == null || tools.length == 0) {

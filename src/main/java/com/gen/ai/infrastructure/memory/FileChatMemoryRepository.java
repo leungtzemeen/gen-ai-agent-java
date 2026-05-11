@@ -38,12 +38,12 @@ public class FileChatMemoryRepository implements ChatMemoryRepository {
     }
 
     public FileChatMemoryRepository(StorageProperties storageProperties) {
-        this(storageProperties, storageProperties.getLastNHistory());
+        this(storageProperties, storageProperties.getStorage().getLastNHistory());
     }
 
     public FileChatMemoryRepository(StorageProperties storageProperties, int lastN) {
         this.lastN = lastN;
-        this.baseDir = storageProperties.getChatHistory();
+        this.baseDir = storageProperties.getStorage().getChatHistory();
         if (this.baseDir == null || this.baseDir.isBlank()) {
             throw new IllegalStateException("app.storage.chat-history 未配置，无法初始化 FileChatMemory");
         }

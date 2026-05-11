@@ -46,7 +46,7 @@ spring:
     # 点火测试：连接名 map-server，通过 STDIO 拉起外部 MCP（此处用官方 @modelcontextprotocol/server-filesystem
     # 仅作可运行演示；真实地图 MCP 上线后替换 command/args 即可）。
     # 需本机已安装 Node.js。Windows：npx 须 cmd.exe /c。macOS/Linux：可改为 command: npx，args 去掉 /c。
-    # 沙箱目录与 args 末项一致；GenAiAgentApplication#main 与 ApplicationReadyEvent 均会尝试创建该目录。
+    # 沙箱目录与 app.storage.mcp-map-sandbox 及 args 末项一致；由 StorageConfig 在 MCP Bean 之前创建。
     # 启动成功后日志检索：「[WiseLink-MCP] 已发现并注册外部工具列表」。
     # 若暂不联调，将 enabled 改为 false（集成测试已强制关闭 MCP，见 src/test/resources/application.properties）。
     mcp:
@@ -68,7 +68,7 @@ spring:
                 - "-y"
                 # - "@modelcontextprotocol/server-filesystem"
                 - "@amap/amap-maps-mcp-server"
-                - ./data/gen-ai-agent/mcp-map-sandbox
+                - ${app.storage.mcp-map-sandbox}
               env:
                 # 这里的 AMAP_MAPS_API_KEY 是 Node.js 脚本需要的变量名
                 # ${AMAP_MAP_KEY} 是你操作系统中配置的环境变量名
@@ -102,26 +102,38 @@ knife4j:
   setting:
     language: zh_cn
 
-# application.yml
+# ===================================================================
+# 🏆 WiseLink 3.0 完全体·微内核分布式网关核心治理资产
+# ===================================================================
 app:
+  # 1. 统一多租户存储/索引物理阵地（包含 RAG 硬核阈值）
   storage:
-    # root: ${user.home}/data/gen-ai-agent  # 统一根目录，支持跨平台
-    root: ./data/gen-ai-agent # 统一根目录，支持跨平台
-    chat-history: ${app.storage.root}/history
-    rag-docs: ${app.storage.root}/knowledge
-    vector-db: ${app.storage.root}/vector-store
-  # 内存滑动窗口：控制 AI 脑力开销 (Token 消耗的关键)
-    max-messages: 8
-    # 磁盘持久化：控制档案深度
-    last-n-history: 12
-    # 资产收编：单次工具调用返回的最大字符上限
-    max-observation-chars: 8000
-    # 单次对话请求内，所有工具真实执行次数之和上限（成功或 leaf 异常均计数）
-    max-tool-invocations-per-request: 5
-    # RAG 默认只吐出 2 条黄金背景知识
-    rag-top-k: 2
-  # RAG相似度阈值
-  rag:
-    similarity-threshold: 0.75
+    root: ./data                                # 统一根目录，支持跨平台路径无感迁移
+    chat-history: ${app.storage.root}/history   # 历史会话滚动落盘物理仓
+    rag-docs: ${app.storage.root}/knowledge     # 60条手机真理文件存放专区
+    vector-db: ${app.storage.root}/vector-store # 内存级 SimpleVectorStore 磁盘持久化快照点
+    mcp-map-sandbox: ${app.storage.root}/mcp-map-sandbox # 高德 MCP stdio 沙箱（与 spring.ai.mcp...map-server.args 末项一致）
+
+    # 钱包底噪限流防御闸门 (Token 优化关键卡位)
+    max-messages: 8                           # 历史记忆滑动窗口上限
+    last-n-history: 12                        # 磁盘持久化检索深度上限
+    max-observation-chars: 8000               # 单次工具返回最大字符上限
+    max-tool-invocations-per-request: 5       # 单请求所有工具真实执行次数之和上限
+    rag-top-k: 2                              # RAG 知识检索强力限流缩容：仅吐 2 条黄金背景知识
+    similarity-threshold: 0.75                # 【资产收拢】：余弦相似度置信度阈值，低于 0.75 自动过滤
+    
+  # 2. 跨模型通用·微内核插拔式数据源开关
+  datasource:
+    type: json                                # [json | mysql] 应急面试 Mock / 生产级无感热切换
+
+  # 3. 跨模型通用·知识库热开机提取厂格式开关
+  knowledge:
+    type: json                                # [json | markdown] 控制开机解析器插槽策略
+
+  # 4. 跨模型通用·全网关层安全合容风控防线
   security:
     shadow-words-base64: # 影子词库
+      - "Y2hhdGfntK8="                         # 例子：标准的 YAML 数组格式，可以无限向下追加多条 Base64 影子词
+      - "ZGVlcHNlZWs="                         # 只要有需要，直接用 - 开行平铺，Jackson 100% 自动吃进
+
+

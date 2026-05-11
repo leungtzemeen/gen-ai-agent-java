@@ -1,9 +1,5 @@
 package com.gen.ai;
 
-import java.io.IOException;
-import java.nio.file.Files;
-import java.nio.file.Path;
-
 import org.springframework.ai.mcp.client.common.autoconfigure.McpClientAutoConfiguration;
 import org.springframework.ai.mcp.client.common.autoconfigure.McpToolCallbackAutoConfiguration;
 import org.springframework.ai.mcp.client.httpclient.autoconfigure.SseHttpClientTransportAutoConfiguration;
@@ -25,15 +21,7 @@ import org.springframework.boot.autoconfigure.SpringBootApplication;
         })
 public class GenAiAgentApplication {
 
-    /** 与 application-dev.yml 中 map-server stdio 工作目录一致；须在 MCP 子进程启动前存在 */
-    private static final Path MCP_MAP_SERVER_SANDBOX = Path.of("data", "gen-ai-agent", "mcp-map-sandbox");
-
     public static void main(String[] args) {
-        try {
-            Files.createDirectories(MCP_MAP_SERVER_SANDBOX);
-        } catch (IOException ex) {
-            throw new IllegalStateException("无法创建 map-server MCP 沙箱目录: " + MCP_MAP_SERVER_SANDBOX, ex);
-        }
         SpringApplication.run(GenAiAgentApplication.class, args);
     }
 }

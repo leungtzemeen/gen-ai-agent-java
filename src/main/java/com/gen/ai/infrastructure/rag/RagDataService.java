@@ -29,7 +29,6 @@ import org.springframework.ai.vectorstore.VectorStore;
 import org.springframework.ai.vectorstore.filter.Filter;
 import org.springframework.ai.vectorstore.filter.FilterExpressionBuilder;
 import org.springframework.core.io.PathResource;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.util.DigestUtils;
 
@@ -59,14 +58,6 @@ public class RagDataService {
     }
 
     /**
-     * RAG 相似度阈值（越大越严格）。
-     * <p>
-     * 可通过 yml 配置 {@code app.rag.similarity-threshold} 覆盖，默认 0.5。
-     */
-    @Value("${app.rag.similarity-threshold:0.5}")
-    private double similarityThreshold;
-
-    /**
      * 从配置的知识库目录（{@code app.storage.rag-docs}）批量导入 Markdown 文档到向量库。
      * <p>
      * 处理流程：遍历目录下所有 {@code .md} 文件 → 计算文件哈希做增量去重 → 删除同名旧数据 → 切片（含 overlap）
@@ -75,7 +66,7 @@ public class RagDataService {
      * 无论中途是否有文件失败，都会在结束时尝试持久化索引（仅对 {@link SimpleVectorStore} 生效）。
      */
     public void importDocs() {
-        String ragDocsDir = storageProperties.getRagDocs();
+        String ragDocsDir = storageProperties.getStorage().getRagDocs();
         if (ragDocsDir == null || ragDocsDir.isBlank()) {
             log.warn(">>>> [RAG-ETL] 未配置 app.storage.rag-docs，已跳过导入");
             return;
@@ -134,7 +125,7 @@ public class RagDataService {
             return;
         }
 
-        String vectorDb = storageProperties.getVectorDb();
+        String vectorDb = storageProperties.getStorage().getVectorDb();
         if (vectorDb == null || vectorDb.isBlank()) {
             log.warn(">>>> [RAG-ETL] 未配置 app.storage.vector-db，已跳过保存 SimpleVectorStore 索引");
             return;
@@ -161,7 +152,7 @@ public class RagDataService {
      * 用于“清空”本地向量库；若路径是目录，会删除目录下所有 JSON 文件。
      */
     private void deleteSimpleVectorStoreFiles() {
-        String vectorDb = storageProperties.getVectorDb();
+        String vectorDb = storageProperties.getStorage().getVectorDb();
         if (vectorDb == null || vectorDb.isBlank()) {
             log.warn(">>>> [RAG-ETL] 未配置 app.storage.vector-db，无法定位 SimpleVectorStore 的本地 JSON 文件");
             return;
@@ -278,7 +269,7 @@ public class RagDataService {
         // 这里只做“是否存在”的去重判定，因此只取 1 条即可。
         List<Document> matches = vectorStore.similaritySearch(SearchRequest.builder()
                 .query(Objects.requireNonNull(filename))
-                .topK(storageProperties.getDuplicateCheckTopK())
+                .topK(storageProperties.getStorage().getRagTopK())
                 .similarityThresholdAll()
                 .filterExpression(Objects.requireNonNull(exp))
                 .build());
@@ -354,8 +345,8 @@ public class RagDataService {
     private List<Document> executeSimilaritySearch(String q, Filter.Expression filterExpression) {
         SearchRequest.Builder b = SearchRequest.builder()
                 .query(Objects.requireNonNullElse(q, ""))
-                .topK(storageProperties.getRagTopK())
-                .similarityThreshold(similarityThreshold);
+                .topK(storageProperties.getStorage().getRagTopK())
+                .similarityThreshold(storageProperties.getStorage().getSimilarityThreshold());
         if (filterExpression != null) {
             b.filterExpression(filterExpression);
         }
@@ -379,6 +370,7 @@ public class RagDataService {
         if (results != null && !results.isEmpty()) {
             return;
         }
+        double similarityThreshold = storageProperties.getStorage().getSimilarityThreshold();
         // 按你的要求：阈值为 0.5 时输出固定文案，便于检索与对齐。
         if (Double.compare(similarityThreshold, 0.5d) == 0) {
             log.info(">>>> [RAG-Search] 未找到相似度大于 0.5 的知识片段。");
