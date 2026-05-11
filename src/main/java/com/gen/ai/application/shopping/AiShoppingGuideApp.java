@@ -1,8 +1,8 @@
 package com.gen.ai.application.shopping;
 
-import java.time.LocalDate;
-import java.util.List;
-import java.util.Locale;
+import java.io.IOException;
+import java.nio.charset.StandardCharsets;
+import java.util.HashMap;
 import java.util.Map;
 import java.util.Objects;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -11,15 +11,12 @@ import java.util.regex.Pattern;
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.chat.client.advisor.MessageChatMemoryAdvisor;
 import org.springframework.ai.chat.memory.ChatMemory;
-import org.springframework.ai.chat.model.ChatResponse;
-import org.springframework.ai.chat.prompt.SystemPromptTemplate;
 import org.springframework.ai.rag.advisor.RetrievalAugmentationAdvisor;
 import org.springframework.ai.rag.retrieval.search.VectorStoreDocumentRetriever;
 import org.springframework.ai.vectorstore.filter.Filter;
 import org.springframework.ai.vectorstore.filter.FilterExpressionBuilder;
+import org.springframework.core.io.Resource;
 import org.springframework.stereotype.Component;
-
-import jakarta.annotation.PostConstruct;
 
 import com.gen.ai.advisor.AppLoggerAdvisor;
 import com.gen.ai.common.exception.SensitivePromptException;
@@ -28,9 +25,11 @@ import com.gen.ai.infrastructure.security.SensitiveWordService;
 import com.gen.ai.prompt.AssistantGuidePromptBundle;
 import com.gen.ai.wiselink.security.WiseLinkToolSecurityInterceptor;
 
+import jakarta.annotation.PostConstruct;
 import lombok.extern.slf4j.Slf4j;
 import reactor.core.publisher.BufferOverflowStrategy;
 import reactor.core.publisher.Flux;
+import reactor.core.publisher.Mono;
 import reactor.core.scheduler.Schedulers;
 
 /**
@@ -50,8 +49,6 @@ public class AiShoppingGuideApp {
     private static final Pattern LIKELY_TOOL_QUERY = Pattern.compile(
             "(导出|PDF|pdf|报告|购物建议书|说明书|下载|库存|价格|多少钱|全网|比价|网页|抓取|记住|意向)",
             Pattern.CASE_INSENSITIVE | Pattern.UNICODE_CASE);
-
-    private static final String ASSISTANT_GUIDE_VAR_CURRENT_DATE = "current_date";
 
     private final ChatClient chatClient;
 
@@ -79,15 +76,7 @@ public class AiShoppingGuideApp {
 
     @PostConstruct
     void logWiseLinkPersonaLoaded() {
-        log.info(">>>> [System] WiseLink 金牌导购人设加载成功（含 Modular RAG Advisor）。");
-    }
-
-    /**
-     * 发起对话，不按品类过滤向量检索（等价于 {@link #doChat(String, String, String)} 且
-     * {@code category} 为 {@code null}）。
-     */
-    public String doChat(String message, String chatId) {
-        return doChat(message, chatId, null);
+        log.info(">>>> [System-Init] WiseLinkAI [流/阻双通道自愈分流网关] 全线安全点火就绪。");
     }
 
     /**
@@ -101,30 +90,8 @@ public class AiShoppingGuideApp {
             throw new SensitivePromptException();
         }
 
-        String systemMessage = renderAssistantGuideSystemPrompt();
-        String conversationId = (chatId == null || chatId.isBlank()) ? "default" : chatId;
-        boolean useCategoryFilter = category != null && !category.isBlank();
-
-        AtomicInteger perRequestToolInvocations = new AtomicInteger(0);
-        ChatResponse response = chatClient
-                .prompt()
-                .system(systemMessage)
-                .user(Objects.requireNonNullElse(message, ""))
-                .toolCallbacks(shoppingGuideMergedToolCallbacks.allToolCallbacks(perRequestToolInvocations))
-                .toolContext(Map.of(WiseLinkToolSecurityInterceptor.TOOL_CONTEXT_SESSION_ID_KEY, conversationId))
-                .advisors(spec -> {
-                    spec.param(ChatMemory.CONVERSATION_ID, (Object) conversationId);
-                    if (useCategoryFilter) {
-                        Filter.Expression exp = new FilterExpressionBuilder().eq("biz_category", category).build();
-                        spec.param(VectorStoreDocumentRetriever.FILTER_EXPRESSION, exp);
-                    }
-                })
-                .call()
-                .chatResponse();
-        String content = response == null || response.getResult() == null || response.getResult().getOutput() == null
-                ? ""
-                : response.getResult().getOutput().getText();
-        return content;
+        var spec = buildUnifiedChatSpec(message, chatId, category);
+        return spec.call().content();
     }
 
     /**
@@ -136,41 +103,51 @@ public class AiShoppingGuideApp {
             log.warn(">>>> [Security] 检测到敏感提问，已在本地拦截");
             return Flux.error(new SensitivePromptException());
         }
-
-        if (likelyNeedsToolFirst(message)) {
+        // 如果是 null，它会自动温和降级自愈为一个纯净的空字符串 ""
+        // 如果是脏字符，Java 11 的 .strip()
+        // 会在内存级别以最高性能抹去两端所有的空白、回车噪音，保证递给百炼大模型的是绝对纯净、没有任何格式污染的“核心提问文本”
+        String cleanedMsg = message == null ? "" : message.strip();
+        // 先人肉通读，如果是调工具，强行改走阻塞通道
+        if (likelyNeedsToolFirst(cleanedMsg)) {
             log.info(">>>> [WiseLink-Stream] 启发式判定可能涉及工具调用，先同步执行完整链路再下发结果");
-            return Flux.defer(() -> Flux.just(doChat(message, chatId, category)))
+            return Mono.fromCallable(() -> doChat(cleanedMsg, chatId, category))
                     .subscribeOn(Schedulers.boundedElastic())
-                    .onBackpressureBuffer(
-                            STREAM_BACKPRESSURE_BUFFER_SIZE,
-                            BufferOverflowStrategy.ERROR);
+                    .flux();
         }
+        // 纯聊天场景：平滑放行，走原生的纯流式逐字吐泡泡通道
+        var spec = buildUnifiedChatSpec(cleanedMsg, chatId, category);
+        return spec.stream().content()
+                .onBackpressureBuffer(
+                        STREAM_BACKPRESSURE_BUFFER_SIZE, // 1024 额度锁死
+                        BufferOverflowStrategy.ERROR);
+    }
 
+    /**
+     * 架构师统一组装中台：把 20 多行一模一样的 ChatClient 链条永久收口！
+     * 一处修改，双通道（Stream/Call）瞬间全局同步
+     */
+    private ChatClient.ChatClientRequestSpec buildUnifiedChatSpec(String message, String chatId, String category) {
         String systemMessage = renderAssistantGuideSystemPrompt();
         String conversationId = (chatId == null || chatId.isBlank()) ? "default" : chatId;
         boolean useCategoryFilter = category != null && !category.isBlank();
 
         AtomicInteger perRequestToolInvocations = new AtomicInteger(0);
-        Flux<String> tokens = chatClient
-                .prompt()
+
+        return chatClient.prompt()
                 .system(systemMessage)
                 .user(Objects.requireNonNullElse(message, ""))
+                // 计数器透传
                 .toolCallbacks(shoppingGuideMergedToolCallbacks.allToolCallbacks(perRequestToolInvocations))
-                .toolContext(Map.of(WiseLinkToolSecurityInterceptor.TOOL_CONTEXT_SESSION_ID_KEY, conversationId))
+                // 用可读写的 HashMap 替换只读 Map.of，彻底封死底层 NPE
+                .toolContext(new HashMap<>(Map.of(
+                        WiseLinkToolSecurityInterceptor.TOOL_CONTEXT_SESSION_ID_KEY, conversationId)))
                 .advisors(spec -> {
-                    spec.param(ChatMemory.CONVERSATION_ID, (Object) conversationId);
+                    spec.param(ChatMemory.CONVERSATION_ID, conversationId);
                     if (useCategoryFilter) {
                         Filter.Expression exp = new FilterExpressionBuilder().eq("biz_category", category).build();
                         spec.param(VectorStoreDocumentRetriever.FILTER_EXPRESSION, exp);
                     }
-                })
-                .stream()
-                .content();
-
-        return tokens
-                .onBackpressureBuffer(
-                        STREAM_BACKPRESSURE_BUFFER_SIZE,
-                        BufferOverflowStrategy.ERROR);
+                });
     }
 
     private static boolean likelyNeedsToolFirst(String message) {
@@ -180,77 +157,31 @@ public class AiShoppingGuideApp {
         return LIKELY_TOOL_QUERY.matcher(message).find();
     }
 
-    /** 渲染人设系统提示（替换 {@code assistant-guide.st} 中的日期等变量）。 */
+    /**
+     * WiseLink 3.0 提示词纯净化升级：
+     * 直接从微内核注册中心提取彻底脱水、无任何动态变量摩擦的纯净静态核心人设。
+     */
     private String renderAssistantGuideSystemPrompt() {
-        String today = LocalDate.now().toString();
-        String rendered = new SystemPromptTemplate(assistantGuidePromptBundle.getSystemResource())
-                .createMessage(Map.of(ASSISTANT_GUIDE_VAR_CURRENT_DATE, today))
-                .getText();
-        if (rendered != null && rendered.contains("{current_date}")) {
-            log.warn(
-                    ">>>> [System] assistant-guide.st 中的日期占位符未被替换，请确认模板变量名为：{}",
-                    ASSISTANT_GUIDE_VAR_CURRENT_DATE);
+        try {
+            // 完美合龙：直接通过我们写好的強类型星图，秒级获取最纯净的人设人设文本
+            // 如果你的 SystemPrompt 也归口到了 Bundle 里，可以用它来优雅接货
+            Resource systemResource = assistantGuidePromptBundle.getSystemResource();
+
+            if (systemResource == null) {
+                return "";
+            }
+
+            // 利用 Spring 的工具类，直接将只读 Resource 转化为纯净字符串，不留任何魔法断层
+            String rendered = org.springframework.util.StreamUtils.copyToString(
+                    systemResource.getInputStream(),
+                    StandardCharsets.UTF_8);
+
+            return Objects.requireNonNullElse(rendered.strip(), "");
+
+        } catch (IOException e) {
+            log.error(">>>> [System-Prompt-Error] 核心人设物理文件加载失败，启动空字符兜底！", e);
+            return "";
         }
-        return Objects.requireNonNullElse(rendered, "");
     }
 
-    /**
-     * 根据用户问题文本做简单规则判断，推断可能的业务分类（用于分区 RAG 检索）。
-     */
-    private static String inferBizCategoryFromPrompt(String prompt) {
-        if (prompt == null || prompt.isBlank()) {
-            return null;
-        }
-        String p = prompt.toLowerCase(Locale.ROOT);
-
-        if (p.contains("cleaning") || p.contains("清洗") || p.contains("清洁") || p.contains("除菌") || p.contains("消毒")) {
-            return "家电清洗";
-        }
-        if (p.contains("health") || p.contains("运动") || p.contains("健康") || p.contains("健身") || p.contains("跑步")
-                || p.contains("心率") || p.contains("瑜伽") || p.contains("体脂")) {
-            return "运动健康";
-        }
-        if (p.contains("audio-visual") || p.contains("影音") || p.contains("电视") || p.contains("投影") || p.contains("音响")
-                || p.contains("耳机") || p.contains("家庭影院") || p.contains("4k") || p.contains("hdr")
-                || p.contains("hdmi")) {
-            return "影音导购";
-        }
-        return null;
-    }
-
-    /** 结构化购物建议报告（由模型按当前对话生成的标题与建议列表）。 */
-    public record ShoppingReport(String title, List<String> suggesions) {
-
-    }
-
-    /**
-     * 带「购物建议报告」输出的对话：在系统提示中追加报告格式约束，并按关键词推断 {@code biz_category} 做分区检索。
-     */
-    public ShoppingReport doChatWithReport(String message, String chatId) {
-        if (sensitiveWordService.containsSensitiveWord(message)) {
-            log.warn(">>>> [Security] 检测到敏感提问，已在本地拦截");
-            throw new SensitivePromptException();
-        }
-
-        String dynamicSystem = renderAssistantGuideSystemPrompt()
-                + "每次对话都要生成购物建议报告, 标题为{用户名}的购物建议报告, 内容为建议列表";
-
-        String bizCategory = inferBizCategoryFromPrompt(message);
-        String conversationId = (chatId == null || chatId.isBlank()) ? "default" : chatId;
-
-        ShoppingReport shoppingReport = chatClient
-                .prompt()
-                .system(dynamicSystem)
-                .user(Objects.requireNonNullElse(message, ""))
-                .advisors(spec -> {
-                    spec.param(ChatMemory.CONVERSATION_ID, (Object) conversationId);
-                    if (bizCategory != null) {
-                        Filter.Expression exp = new FilterExpressionBuilder().eq("biz_category", bizCategory).build();
-                        spec.param(VectorStoreDocumentRetriever.FILTER_EXPRESSION, exp);
-                    }
-                })
-                .call()
-                .entity(ShoppingReport.class);
-        return shoppingReport;
-    }
 }

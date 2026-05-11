@@ -56,22 +56,22 @@ public class AiShoppingGuideController {
         return "ok";
     }
 
-    @GetMapping("/test/filter-search")
-    @Operation(summary = "测试：分区检索（按分类过滤）", description = "用于验证 biz_category 元数据过滤是否生效：直接返回命中的切片内容（不调用大模型）。")
-    public String testFilterSearch(@RequestParam("prompt") String prompt, @RequestParam("category") String category) {
-        List<Document> docs = ragDataService.similaritySearch(prompt, category);
-        if (docs == null || docs.isEmpty()) {
-            return "no matches";
-        }
-        StringBuilder sb = new StringBuilder();
-        for (int i = 0; i < docs.size(); i++) {
-            Document d = docs.get(i);
-            sb.append("[")
-                    .append(i)
-                    .append("] ")
-                    .append(d == null ? "" : String.valueOf(d.getText()))
-                    .append(System.lineSeparator());
-        }
-        return sb.toString();
-    }
+    // @GetMapping("/test/filter-search")
+    // @Operation(summary = "测试：分区检索（按分类过滤）", description = "用于验证 biz_category 元数据过滤是否生效：直接返回命中的切片内容（不调用大模型）。")
+    // public String testFilterSearch(@RequestParam("prompt") String prompt, @RequestParam("category") String category) {
+    //     List<Document> docs = ragDataService.similaritySearch(prompt, category);
+    //     if (docs == null || docs.isEmpty()) {
+    //         return "no matches";
+    //     }
+    //     StringBuilder sb = new StringBuilder();
+    //     for (int i = 0; i < docs.size(); i++) {
+    //         Document d = docs.get(i);
+    //         sb.append("[")
+    //                 .append(i)
+    //                 .append("] ")
+    //                 .append(d == null ? "" : String.valueOf(d.getText()))
+    //                 .append(System.lineSeparator());
+    //     }
+    //     return sb.toString();
+    // }
 }
