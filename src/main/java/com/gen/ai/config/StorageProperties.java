@@ -31,7 +31,9 @@ public class StorageProperties {
         private int maxObservationChars = 8000;
         private int maxToolInvocationsPerRequest = 5;
         private int ragTopK = 2;
-        private double similarityThreshold = 0.75; 
+        private double similarityThreshold = 0.75;
+        /** 商品列表工具单次最多返回条数（名称/描述/价格筛选后截断）。 */
+        private int productQueryMaxResults = 5;
     }
 
     @Data
@@ -42,6 +44,8 @@ public class StorageProperties {
     @Data
     public static class KnowledgeNode {
         private String type = "json";
+        /** 导入时默认 biz_category（如 JSON 按类目过滤）；与业务知识库约定一致。 */
+        private String defaultBizCategory = "手机";
     }
 
     @Data

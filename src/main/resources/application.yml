@@ -120,7 +120,9 @@ app:
     max-observation-chars: 8000               # 单次工具返回最大字符上限
     max-tool-invocations-per-request: 5       # 单请求所有工具真实执行次数之和上限
     rag-top-k: 2                              # RAG 知识检索强力限流缩容：仅吐 2 条黄金背景知识
-    similarity-threshold: 0.75                # 【资产收拢】：余弦相似度置信度阈值，低于 0.75 自动过滤
+    similarity-threshold: 0.5                 # 【资产收拢】：余弦相似度置信度阈值，低于 0.5 自动过滤
+    product-query-max-results: 5              # 商品查询工具最多返回条数
+
     
   # 2. 跨模型通用·微内核插拔式数据源开关
   datasource:
@@ -129,6 +131,8 @@ app:
   # 3. 跨模型通用·知识库热开机提取厂格式开关
   knowledge:
     type: json                                # [json | markdown] 控制开机解析器插槽策略
+    default-biz-category: 手机                 # 导入/预热时默认类目（JSON 过滤等）
+    # JSON 行级增量依赖 metadata：goods_id + update_time（或 updateTime）；缺 update_time 时每次导入会删旧重写该 goods_id
 
   # 4. 跨模型通用·全网关层安全合容风控防线
   security:

@@ -8,29 +8,26 @@ import com.gen.ai.wiselink.annotation.WiseLinkTool;
 import lombok.RequiredArgsConstructor;
 
 /**
- * WiseLink 商品类工具：价格 / 库存查询（由 {@link com.gen.ai.wiselink.registry.WiseLinkToolRegistry} 扫描注册）。
+ * WiseLink 商品工具：按条件查询本地商品目录，返回 JSON 数组字符串供模型向用户展示。
+ * <p>
+ * 入参均为可选字符串，空串表示不参与该维度过滤。
  */
 @Service
 @RequiredArgsConstructor
 public class WiseLinkProductToolsService {
 
-    /** 工具入参：商品名称（由模型从用户话术中抽取）。 */
-    public record ItemRequest(String itemName) {
-    }
-
     private final MockOrderService mockOrderService;
 
     @WiseLinkTool(
-            name = "getProductPriceFunction",
-            description = "用于查询特定商品的实时价格（参数包含商品名称）。")
-    public String getProductPrice(ItemRequest request) {
-        return mockOrderService.getProductPrice(request.itemName()).toPlainString();
-    }
-
-    @WiseLinkTool(
-            name = "getProductStockFunction",
-            description = "用于查询特定商品的实时库存（参数包含商品名称）。")
-    public String getProductStock(ItemRequest request) {
-        return String.valueOf(mockOrderService.getProductStock(request.itemName()));
+            name = "searchProductsFunction",
+            description = "查询商品列表（含名称、预算、规格、价格文案、专家简报、图片等；不含时间戳字段）。"
+                    + "keyword：可选，在名称/描述/规格/预算/价格文案中模糊匹配；"
+                    + "minPrice、maxPrice：可选数字字符串，按价格文案中解析出的参考价筛选；"
+                    + "三者都空则返回默认类目前若干条。返回条数上限由服务端配置。")
+    public String searchProducts(String keyword, String minPrice, String maxPrice) {
+        return mockOrderService.searchProductsAsJson(
+                keyword != null ? keyword : "",
+                minPrice != null ? minPrice : "",
+                maxPrice != null ? maxPrice : "");
     }
 }

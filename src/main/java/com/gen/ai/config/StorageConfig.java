@@ -16,6 +16,7 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
 import com.gen.ai.infrastructure.memory.FileChatMemoryRepository;
+import com.gen.ai.infrastructure.rag.VectorStoragePaths;
 
 import jakarta.annotation.PostConstruct;
 import lombok.RequiredArgsConstructor;
@@ -59,13 +60,15 @@ public class StorageConfig {
     @Bean
     public VectorStore vectorStore(EmbeddingModel dashscopeEmbeddingModel) {
         // 这是一个本地文件版的向量数据库，它会把索引存在你配置的 vector-db 路径下
-        String vectorDbPath = storageProperties.getStorage().getVectorDb();
         SimpleVectorStore vectorStore = SimpleVectorStore.builder(dashscopeEmbeddingModel).build();
 
-        File vectorFile = new File(vectorDbPath);
-        if (vectorFile.exists()) {
-            // 启动时自动加载之前存好的知识
-            vectorStore.load(vectorFile);
+        Path indexPath = VectorStoragePaths.resolveVectorIndexFile(storageProperties);
+        if (indexPath != null) {
+            File vectorFile = indexPath.toFile();
+            if (vectorFile.exists()) {
+                // 启动时自动加载之前存好的知识（目录配置时加载 vector-store.json）
+                vectorStore.load(vectorFile);
+            }
         }
         return vectorStore;
     }

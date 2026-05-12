@@ -7,6 +7,7 @@ import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.rag.advisor.RetrievalAugmentationAdvisor;
 import org.springframework.ai.rag.generation.augmentation.ContextualQueryAugmenter;
 import org.springframework.ai.rag.preretrieval.query.transformation.CompressionQueryTransformer;
+import org.springframework.ai.rag.retrieval.search.DocumentRetriever;
 import org.springframework.ai.rag.retrieval.search.VectorStoreDocumentRetriever;
 import org.springframework.ai.vectorstore.VectorStore;
 import org.springframework.beans.factory.annotation.Value;
@@ -16,6 +17,7 @@ import org.springframework.context.annotation.DependsOn;
 import org.springframework.core.io.Resource;
 import org.springframework.util.StreamUtils;
 
+import com.gen.ai.advisor.LoggingDocumentRetriever;
 import com.gen.ai.prompt.AssistantGuidePromptBundle;
 import com.gen.ai.prompt.PromptDefinition;
 import com.gen.ai.prompt.WiseLinkPromptRegistry;
@@ -66,6 +68,7 @@ public class WiseLinkRagAdvisorConfig {
                                 .similarityThreshold(storageProperties.getStorage().getSimilarityThreshold())
                                 .topK(storageProperties.getStorage().getRagTopK())
                                 .build();
+                DocumentRetriever retrieverWithLog = new LoggingDocumentRetriever(retriever);
 
                 ContextualQueryAugmenter augmenter = ContextualQueryAugmenter.builder()
                                 .promptTemplate(registry.get(PromptDefinition.CONTEXTUAL_QUERY_AUGMENT))
@@ -75,7 +78,7 @@ public class WiseLinkRagAdvisorConfig {
                 return RetrievalAugmentationAdvisor.builder()
                                 .queryTransformers(compressionScoped)
                                 .queryExpander(wiseLinkMultiQueryExpander)
-                                .documentRetriever(retriever)
+                                .documentRetriever(retrieverWithLog)
                                 .queryAugmenter(augmenter)
                                 .build();
         }

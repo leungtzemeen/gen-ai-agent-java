@@ -45,9 +45,9 @@ public class AiShoppingGuideApp {
 
     private static final int STREAM_BACKPRESSURE_BUFFER_SIZE = 1024;
 
-    /** 启发式：更像会触发 WiseLink 工具（PDF/价格/库存/下载等）的提问走阻塞 call，先完整执行工具再一次性返回，避免与流式冲突。 */
+    /** 启发式：更像会触发 WiseLink 工具（PDF/商品列表/价格/下载等）的提问走阻塞 call，先完整执行工具再一次性返回，避免与流式冲突。 */
     private static final Pattern LIKELY_TOOL_QUERY = Pattern.compile(
-            "(导出|PDF|pdf|报告|购物建议书|说明书|下载|库存|价格|多少钱|全网|比价|网页|抓取|记住|意向)",
+            "(导出|PDF|pdf|报告|购物建议书|说明书|下载|商品列表|列出商品|搜商品|有哪些手机|推荐.*手机|价格|多少钱|全网|比价|网页|抓取|记住|意向)",
             Pattern.CASE_INSENSITIVE | Pattern.UNICODE_CASE);
 
     private final ChatClient chatClient;

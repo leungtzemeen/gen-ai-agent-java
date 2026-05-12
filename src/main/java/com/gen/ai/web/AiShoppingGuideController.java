@@ -12,7 +12,7 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import com.gen.ai.application.shopping.AiShoppingGuideApp;
-import com.gen.ai.infrastructure.rag.RagDataService;
+import com.gen.ai.infrastructure.rag.service.RagDataService;
 
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;

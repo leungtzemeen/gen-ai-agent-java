@@ -42,8 +42,8 @@ RAG 不走手工拼接 Prompt 的野路子，而是 **`RetrievalAugmentationAdvi
 
 ### 实时工具联动（Function Calling）
 
-- 注册 **`getProductPriceFunction`** / **`getProductStockFunction`** 等函数 Bean。
-- 人设模板约束：**价格 / 库存必须走工具**，禁止凭记忆「脑补实时数据」——把 **零幻觉** 从口号做成 **协议**。
+- 注册 **`searchProductsFunction`** 等函数 Bean：按关键词 / 价格区间查询本地商品目录 JSON，返回结构化列表（不含时间戳字段），便于向用户展示。
+- 人设模板约束：**可核对的商品字段（如价格文案、规格列表）须以工具返回为准**，禁止凭记忆「脑补目录或价格」——把 **零幻觉** 从口号做成 **协议**。
 
 ---
 
@@ -85,7 +85,7 @@ flowchart LR
   RAG --> Q1
   Q1 --> LLM[DashScope Chat Model]
   LLM --> TOOL{Function Calling}
-  TOOL -->|价格/库存| MOCK[MockOrderService 等]
+  TOOL -->|商品查询| MOCK[MockOrderService 等]
   TOOL --> RESP[自然语言回复\n高情商 + 有据可依]
 ```
 
