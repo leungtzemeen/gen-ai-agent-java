@@ -8,6 +8,9 @@ public enum ManusStepMessageType {
     /** 编排层生命周期（RUN_STARTED、STEP_STARTED、RUN_FINISHED 等）。 */
     META,
 
+    /** Phase B：首步前计划摘要（对应 {@link ManusStepPhase#PLAN_SNIPPET}）。 */
+    PLAN_SNIPPET,
+
     /** 本步助手自然语言可见摘要（对应 {@link ManusStepPhase#STEP_OUTCOME} 的主文本）。 */
     MODEL,
 

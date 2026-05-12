@@ -36,6 +36,19 @@ public record ManusStepEvent(
                 Optional.empty());
     }
 
+    /** Phase B：首步前的计划/任务理解文本（仅可观测，不进 Memory）。 */
+    public static ManusStepEvent planSnippet(String summary) {
+        return new ManusStepEvent(
+                ManusStepPhase.PLAN_SNIPPET,
+                Optional.empty(),
+                summary,
+                Optional.empty(),
+                Optional.empty(),
+                Optional.empty(),
+                Optional.of(ManusStepMessageType.PLAN_SNIPPET),
+                Optional.empty());
+    }
+
     /** 兼容旧调用方：{@code ragOn} 默认为 {@code false}。 */
     public static ManusStepEvent stepStarted(int stepIndex, String summary) {
         return stepStarted(stepIndex, summary, false);

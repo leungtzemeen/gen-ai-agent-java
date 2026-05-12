@@ -6,6 +6,7 @@ import org.springframework.stereotype.Component;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.gen.ai.application.manus.api.ManusBrainResolver;
+import com.gen.ai.application.manus.api.ManusPlanner;
 import com.gen.ai.application.manus.api.ManusRunRequest;
 import com.gen.ai.application.manus.api.ManusRunResult;
 import com.gen.ai.application.manus.api.ManusStepExecutor;
@@ -32,6 +33,7 @@ public final class ManusChatSseService {
     private final ManusBrainResolver manusBrainResolver;
     private final ManusStepExecutor manusStepExecutor;
     private final RagParticipationPolicy ragParticipationPolicy;
+    private final ManusPlanner manusPlanner;
     private final ObjectMapper objectMapper;
 
     /**
@@ -62,7 +64,8 @@ public final class ManusChatSseService {
                                                 manusBrainResolver,
                                                 manusStepExecutor,
                                                 loggingSink,
-                                                ragParticipationPolicy);
+                                                ragParticipationPolicy,
+                                                manusPlanner);
                                 ManusRunResult result = orchestrator.run(request);
                                 String doneJson =
                                         objectMapper.writeValueAsString(

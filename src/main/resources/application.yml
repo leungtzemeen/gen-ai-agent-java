@@ -6,6 +6,9 @@ server:
 wiselink:
   # 拨码开关：ollama (本地), dashscope (百炼), deepseek (深度求索)
   active-brain: deepseek
+  manus:
+    # noop：首步前不额外调用 LLM；llm：同 ChatModel 无 Memory 短调用，产出 SSE phase=PLAN_SNIPPET
+    planner: noop
 
 spring:
   config:

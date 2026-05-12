@@ -169,18 +169,30 @@ com.gen.ai.application.manus
 
 | 字段 | 类型 | 说明 |
 |------|------|------|
-| `phase` | string | 与 `ManusStepPhase` 枚举同名：`RUN_STARTED`、`STEP_STARTED`、`STEP_OUTCOME`、`RUN_FINISHED`。 |
+| `phase` | string | 与 `ManusStepPhase` 枚举同名：`RUN_STARTED`、`PLAN_SNIPPET`（Phase B）、`STEP_STARTED`、`STEP_OUTCOME`、`RUN_FINISHED`。 |
 | `stepIndex` | int 或 null | 从 1 开始；生命周期类事件可为 null。 |
 | `summary` | string | 人类可读摘要；`STEP_OUTCOME` 时为完整助手可见文本（与现网一致）。 |
 | `toolHint` | string 或 null | 本步模型声明的工具名列表（逗号分隔），无工具调用时为 null。 |
 | `ragOn` | bool 或 null | 本步是否按 `RagParticipationPolicy` 启用 RAG；`STEP_STARTED` / `STEP_OUTCOME` 时有值。 |
 | `latencyMs` | long 或 null | `SpringAiManusStepExecutor` 单次 `ChatClient.call()` 墙钟耗时（毫秒）；仅 `STEP_OUTCOME` 有值。 |
-| `messageType` | string 或 null | `ManusStepMessageType`：`META`（编排元信息）、`MODEL`（本步自然语言结果）、`TOOL`（本步结束后仍 `hasToolCalls`，外层将继续下一步）。 |
+| `messageType` | string 或 null | `ManusStepMessageType`：`META`、`PLAN_SNIPPET`（Phase B 计划摘要）、`MODEL`、`TOOL`。 |
 | `hasPendingToolCalls` | bool 或 null | 与 Spring AI `ChatResponse#hasToolCalls()` 对齐；`STEP_OUTCOME` 时有值。 |
 
 **兼容**：旧前端可继续只读 `phase` / `stepIndex` / `summary`；新字段缺省为 JSON `null`（由 DTO 映射）。`ManusStepExecutor` 自定义实现若未填充 `ManusStepOutcome` 的扩展字段，编排层仍按 `hasPendingToolCalls` 缺省视为「无挂起工具」映射 `messageType`。
 
 **实现要点**：`ManusStepOutcome` 增加可选的 `stepLatencyMillis`、`hasPendingToolCalls`、`toolHintForObservers`；`DefaultManusOrchestrator` 将 policy 的 `ragOn` 与 outcome 合并进 `ManusStepEvent.stepOutcome(...)`。
+
+---
+
+### Phase B — 可选首步前计划（`ManusPlanner`，不进 Memory）✅
+
+**目标**：在 `RUN_STARTED` 之后、外层 `STEP_STARTED` 之前，可选多一条 **`PLAN_SNIPPET`** 事件，便于前端展示「任务理解」；**不**经 `MessageChatMemoryAdvisor` 写入会话 Memory。
+
+**开关**：`wiselink.manus.planner` = `noop`（默认）| `llm`。`llm` 时使用与当前激活 `ChatModel` 一致的 **`ChatClient.builder(chatModel).build()`**（无默认 advisors）做一次短 system+user 调用；失败则静默跳过（与 `LlmManusPlanner` 内 try/catch 一致）。
+
+**契约**：`ManusPlanner#planBrief(ManusRunContext)`；`NoOpManusPlanner`；`DefaultManusOrchestrator` 在 `resolve` 之后调用，不改变「单次 `resolve`」与后续 `ManusStepExecutor` 语义。
+
+**验收**：`DefaultManusOrchestratorTest` 含 planner 返回文案时 phase 序列为 `RUN_STARTED` → `PLAN_SNIPPET` → …；默认 `noop` 下与 Phase A 前行为一致（无 `PLAN_SNIPPET`）。
 
 ---
 

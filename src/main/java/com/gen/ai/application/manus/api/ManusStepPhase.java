@@ -10,6 +10,11 @@ public enum ManusStepPhase {
     /** 整次 Manus 任务已创建上下文（含 {@link ManusBrainResolver} 冻结结果）。 */
     RUN_STARTED,
 
+    /**
+     * Phase B：首步前由 {@link ManusPlanner} 生成的计划/任务理解摘要（仅 SSE，不进 Memory）。
+     */
+    PLAN_SNIPPET,
+
     /** 即将执行第 k 步（尚未调用 LLM）。 */
     STEP_STARTED,
 

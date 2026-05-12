@@ -1,6 +1,7 @@
 package com.gen.ai.application.manus.orchestration;
 
 import com.gen.ai.application.manus.api.ManusBrainResolver;
+import com.gen.ai.application.manus.api.ManusPlanner;
 import com.gen.ai.application.manus.api.ManusRunContext;
 import com.gen.ai.application.manus.api.ManusRunRequest;
 import com.gen.ai.application.manus.api.ManusRunResult;
@@ -25,6 +26,8 @@ import lombok.extern.slf4j.Slf4j;
  *       Phase 3～5 在构建本任务所用 {@link org.springframework.ai.chat.client.ChatClient} 时，应为<strong>整次 Manus
  *       任务</strong>创建<strong>一个</strong>{@link java.util.concurrent.atomic.AtomicInteger} 传入工具装饰链，
  *       避免「每外层一步重置预算」导致工具滥用或计数失真。</li>
+ *   <li>Phase B：可选 {@link ManusPlanner} 在首步前产出 {@link com.gen.ai.application.manus.api.ManusStepPhase#PLAN_SNIPPET}，
+ *       不得写入 ChatMemory。</li>
  * </ul>
  */
 @Slf4j
@@ -35,6 +38,7 @@ public final class DefaultManusOrchestrator implements ManusOrchestrator {
     private final ManusStepExecutor stepExecutor;
     private final ManusStepEventSink stepEventSink;
     private final RagParticipationPolicy ragParticipationPolicy;
+    private final ManusPlanner manusPlanner;
 
     @Override
     public ManusRunResult run(ManusRunRequest request) {
@@ -55,6 +59,12 @@ public final class DefaultManusOrchestrator implements ManusOrchestrator {
 
         stepEventSink.onEvent(
                 ManusStepEvent.runStarted("Manus run started for chatId=" + request.chatId()));
+
+        manusPlanner
+                .planBrief(context)
+                .map(String::strip)
+                .filter(s -> !s.isBlank())
+                .ifPresent(text -> stepEventSink.onEvent(ManusStepEvent.planSnippet(text)));
 
         int executed = 0;
         String lastSummary = "";

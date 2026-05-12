@@ -19,6 +19,7 @@ import com.gen.ai.application.manus.api.ManusStepOutcome;
 import com.gen.ai.application.manus.api.ManusTerminationReason;
 import com.gen.ai.application.manus.orchestration.DefaultManusOrchestrator;
 import com.gen.ai.application.manus.policy.FirstStepOnlyRagPolicy;
+import com.gen.ai.application.manus.runtime.NoOpManusPlanner;
 
 import org.springframework.ai.chat.client.ChatClient;
 
@@ -62,7 +63,8 @@ class DefaultManusBrainResolverSpringBootTest {
         ManusStepEventSink sink = e -> {};
 
         DefaultManusOrchestrator orchestrator =
-                new DefaultManusOrchestrator(defaultManusBrainResolver, executor, sink, policy);
+                new DefaultManusOrchestrator(
+                        defaultManusBrainResolver, executor, sink, policy, NoOpManusPlanner.INSTANCE);
 
         orchestrator.run(new ManusRunRequest("q", "same-client-chat", null, 10));
 
