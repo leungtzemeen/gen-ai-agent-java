@@ -3,9 +3,12 @@ package com.gen.ai.application.manus.runtime;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
+import java.util.stream.Collectors;
 
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.chat.memory.ChatMemory;
+import org.springframework.ai.chat.messages.AssistantMessage;
 import org.springframework.ai.chat.model.ChatResponse;
 import org.springframework.ai.rag.retrieval.search.VectorStoreDocumentRetriever;
 import org.springframework.ai.vectorstore.filter.Filter;
@@ -95,31 +98,53 @@ public final class SpringAiManusStepExecutor implements ManusStepExecutor {
                             }
                         });
 
+        long t0 = System.nanoTime();
         ChatClient.CallResponseSpec callResponse = spec.call();
+        long elapsedMs = Math.max(0L, (System.nanoTime() - t0) / 1_000_000L);
+        Optional<Long> latency = Optional.of(elapsedMs);
+
         // 只走一次 CallResponseSpec：先取 chatResponse；勿在 content() 之后再调 chatResponse()，否则会触发
         // DefaultAroundAdvisorChain「No CallAdvisors available to execute」（链已耗尽）。
         ChatResponse chatResponse = callResponse.chatResponse();
         String text = extractAssistantText(chatResponse);
         String preview = summarizeForUi(text);
+        Optional<String> toolHint = extractToolHint(chatResponse);
+        boolean pendingTools = chatResponse != null && chatResponse.hasToolCalls();
 
         if (text != null && text.contains("本用户请求内所有工具调用额度已用尽")) {
             log.warn(">>>> [Manus-StepExecutor] step={} 命中工具预算断路提示，结束 Manus", stepIndex);
-            return ManusStepOutcome.finish(ManusTerminationReason.MODEL_DONE, preview);
+            return ManusStepOutcome.finish(
+                    ManusTerminationReason.MODEL_DONE,
+                    preview,
+                    latency,
+                    Optional.of(false),
+                    toolHint);
         }
 
         if (chatResponse != null && !chatResponse.hasToolCalls()) {
             log.info(
                     ">>>> [Manus-StepExecutor] step={} 本步最终回复未再请求工具调用（hasToolCalls=false），结束 Manus 外层循环",
                     stepIndex);
-            return ManusStepOutcome.finish(ManusTerminationReason.MODEL_DONE, preview);
+            return ManusStepOutcome.finish(
+                    ManusTerminationReason.MODEL_DONE,
+                    preview,
+                    latency,
+                    Optional.of(false),
+                    toolHint);
         }
 
         if (stepIndex >= request.maxSteps()) {
             log.info(">>>> [Manus-StepExecutor] step={} 已达 request.maxSteps，结束 Manus", stepIndex);
-            return ManusStepOutcome.finish(ManusTerminationReason.MODEL_DONE, preview);
+            return ManusStepOutcome.finish(
+                    ManusTerminationReason.MODEL_DONE,
+                    preview,
+                    latency,
+                    Optional.of(pendingTools),
+                    toolHint);
         }
 
-        return ManusStepOutcome.continueRun(preview);
+        return ManusStepOutcome.continueRun(
+                preview, latency, Optional.of(pendingTools), toolHint);
     }
 
     private static String extractAssistantText(ChatResponse chatResponse) {
@@ -130,6 +155,25 @@ public final class SpringAiManusStepExecutor implements ManusStepExecutor {
         }
         String t = chatResponse.getResult().getOutput().getText();
         return t != null ? t : "";
+    }
+
+    private static Optional<String> extractToolHint(ChatResponse chatResponse) {
+        if (chatResponse == null || chatResponse.getResult() == null) {
+            return Optional.empty();
+        }
+        AssistantMessage msg = chatResponse.getResult().getOutput();
+        if (msg == null || !msg.hasToolCalls() || msg.getToolCalls() == null || msg.getToolCalls().isEmpty()) {
+            return Optional.empty();
+        }
+        String joined =
+                msg.getToolCalls().stream()
+                        .map(AssistantMessage.ToolCall::name)
+                        .filter(Objects::nonNull)
+                        .map(String::trim)
+                        .filter(s -> !s.isEmpty())
+                        .distinct()
+                        .collect(Collectors.joining(","));
+        return joined.isEmpty() ? Optional.empty() : Optional.of(joined);
     }
 
     /**

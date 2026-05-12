@@ -71,7 +71,7 @@ com.gen.ai.application.manus
 ### 2.5 `ManusOrchestrator`
 
 - **职责**：`run(ManusRunRequest) -> ManusRunResult`；循环内：**先** `sink.onEvent(STARTED)` → `executor.executeStep(k)` → `sink.onEvent(TOOL/OBS/...)` → 检查终止条件。  
-- **禁止**：内聚 HTTP、敏感词、RAG 细节（敏感词可在 Controller 或单独 `MinusRequestGuard` 一层）。
+- **禁止**：内聚 HTTP、敏感词、RAG 细节（敏感词可在 Controller 或单独请求守卫层）。
 
 ---
 
@@ -158,6 +158,29 @@ com.gen.ai.application.manus
 - **文档**：`README.md`「Manus 模式」小节链至 **`docs/MANUS-DESIGN-PHASES.md`**；架构说明见 **`docs/MANUS-ARCHITECTURE.md`**，其中 **§6** 补充 Phase 2～5 落地索引与指向本文的链接。
 
 **验收**：日志可对齐单次请求的 step / rag；同一 Manus 任务多步日志中工具预算计数器 `identityHashCode` 一致；README 与 `docs/` 内两篇文档交叉链接有效。
+
+---
+
+### Phase A — SSE `event: manus` JSON 可观测字段（向后兼容）✅
+
+**目标**：在**不改变**编排语义、不改动「循环外一次 `resolve` / 双 `ChatClient` RAG 策略 / 工具预算共享」的前提下，让步事件 JSON 足够支撑前端「智能体面板」式展示（阶段、耗时、是否仍要工具、RAG 开关等）。
+
+**约定**（`ManusStepEvent` → `ManusStepEventDto`，经 `JsonSseManusStepEventSink` 下发）：
+
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| `phase` | string | 与 `ManusStepPhase` 枚举同名：`RUN_STARTED`、`STEP_STARTED`、`STEP_OUTCOME`、`RUN_FINISHED`。 |
+| `stepIndex` | int 或 null | 从 1 开始；生命周期类事件可为 null。 |
+| `summary` | string | 人类可读摘要；`STEP_OUTCOME` 时为完整助手可见文本（与现网一致）。 |
+| `toolHint` | string 或 null | 本步模型声明的工具名列表（逗号分隔），无工具调用时为 null。 |
+| `ragOn` | bool 或 null | 本步是否按 `RagParticipationPolicy` 启用 RAG；`STEP_STARTED` / `STEP_OUTCOME` 时有值。 |
+| `latencyMs` | long 或 null | `SpringAiManusStepExecutor` 单次 `ChatClient.call()` 墙钟耗时（毫秒）；仅 `STEP_OUTCOME` 有值。 |
+| `messageType` | string 或 null | `ManusStepMessageType`：`META`（编排元信息）、`MODEL`（本步自然语言结果）、`TOOL`（本步结束后仍 `hasToolCalls`，外层将继续下一步）。 |
+| `hasPendingToolCalls` | bool 或 null | 与 Spring AI `ChatResponse#hasToolCalls()` 对齐；`STEP_OUTCOME` 时有值。 |
+
+**兼容**：旧前端可继续只读 `phase` / `stepIndex` / `summary`；新字段缺省为 JSON `null`（由 DTO 映射）。`ManusStepExecutor` 自定义实现若未填充 `ManusStepOutcome` 的扩展字段，编排层仍按 `hasPendingToolCalls` 缺省视为「无挂起工具」映射 `messageType`。
+
+**实现要点**：`ManusStepOutcome` 增加可选的 `stepLatencyMillis`、`hasPendingToolCalls`、`toolHintForObservers`；`DefaultManusOrchestrator` 将 policy 的 `ragOn` 与 outcome 合并进 `ManusStepEvent.stepOutcome(...)`。
 
 ---
 

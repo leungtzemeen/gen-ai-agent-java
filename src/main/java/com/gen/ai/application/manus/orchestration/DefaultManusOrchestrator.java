@@ -7,11 +7,11 @@ import com.gen.ai.application.manus.api.ManusRunResult;
 import com.gen.ai.application.manus.api.ManusStepEvent;
 import com.gen.ai.application.manus.api.ManusStepEventSink;
 import com.gen.ai.application.manus.api.ManusStepExecutor;
+import com.gen.ai.application.manus.api.ManusStepMessageType;
 import com.gen.ai.application.manus.api.ManusStepOutcome;
 import com.gen.ai.application.manus.api.ManusTerminationReason;
 import com.gen.ai.application.manus.policy.RagParticipationPolicy;
 
-import java.util.Optional;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import lombok.RequiredArgsConstructor;
@@ -69,17 +69,24 @@ public final class DefaultManusOrchestrator implements ManusOrchestrator {
                     context.chatRuntime().runtimeDebugId());
 
             stepEventSink.onEvent(
-                    ManusStepEvent.stepStarted(step, "Step " + step + " starting (rag=" + ragOn + ")"));
+                    ManusStepEvent.stepStarted(step, "Step " + step + " starting (rag=" + ragOn + ")", ragOn));
 
             ManusStepOutcome outcome = stepExecutor.execute(context, step);
             executed = step;
             lastSummary = outcome.stepSummaryForUi();
 
+            boolean pendingTools = outcome.hasPendingToolCalls().orElse(false);
+            ManusStepMessageType payloadKind =
+                    pendingTools ? ManusStepMessageType.TOOL : ManusStepMessageType.MODEL;
             stepEventSink.onEvent(
                     ManusStepEvent.stepOutcome(
                             step,
                             outcome.stepSummaryForUi(),
-                            Optional.empty()));
+                            outcome.toolHintForObservers(),
+                            ragOn,
+                            outcome.stepLatencyMillis(),
+                            payloadKind,
+                            outcome.hasPendingToolCalls()));
 
             if (outcome.finishedRun()) {
                 ManusTerminationReason reason =

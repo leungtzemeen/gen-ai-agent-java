@@ -20,12 +20,16 @@ class JsonSseManusStepEventSinkTest {
         List<ServerSentEvent<String>> out = new ArrayList<>();
         var sink = new JsonSseManusStepEventSink(out::add, om);
 
-        sink.onEvent(ManusStepEvent.stepStarted(1, "hello"));
+        sink.onEvent(ManusStepEvent.stepStarted(1, "hello", true));
         sink.onEvent(ManusStepEvent.runFinished("bye", ManusTerminationReason.MODEL_DONE));
 
         assertThat(out).hasSize(2);
         assertThat(out.get(0).event()).isEqualTo("manus");
-        assertThat(out.get(0).data()).contains("STEP_STARTED").contains("\"stepIndex\":1");
+        assertThat(out.get(0).data())
+                .contains("STEP_STARTED")
+                .contains("\"stepIndex\":1")
+                .contains("\"ragOn\":true")
+                .contains("\"messageType\":\"META\"");
         assertThat(out.get(1).data()).contains("RUN_FINISHED").contains("MODEL_DONE");
     }
 }
