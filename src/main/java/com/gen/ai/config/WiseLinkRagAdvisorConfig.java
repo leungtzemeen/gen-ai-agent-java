@@ -21,8 +21,8 @@ import com.gen.ai.advisor.LoggingDocumentRetriever;
 import com.gen.ai.prompt.AssistantGuidePromptBundle;
 import com.gen.ai.prompt.PromptDefinition;
 import com.gen.ai.prompt.WiseLinkPromptRegistry;
-import com.gen.ai.rag.ShortCircuitCompressionQueryTransformer;
-import com.gen.ai.rag.WiseLinkMultiQueryExpander;
+import com.gen.ai.infrastructure.rag.query.ShortCircuitCompressionQueryTransformer;
+import com.gen.ai.infrastructure.rag.query.WiseLinkMultiQueryExpander;
 
 /**
  * WiseLink Modular RAG：装配 {@link RetrievalAugmentationAdvisor}（压缩改写 → 分身扩展 →

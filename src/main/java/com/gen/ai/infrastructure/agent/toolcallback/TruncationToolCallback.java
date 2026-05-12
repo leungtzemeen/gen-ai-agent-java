@@ -1,4 +1,4 @@
-package com.gen.ai.infrastructure.tool;
+package com.gen.ai.infrastructure.agent.toolcallback;
 
 import org.springframework.ai.chat.model.ToolContext;
 import org.springframework.ai.tool.ToolCallback;

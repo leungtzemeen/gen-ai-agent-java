@@ -29,7 +29,7 @@ import com.gen.ai.infrastructure.rag.ingestion.KnowledgeVectorIngester;
 import com.gen.ai.infrastructure.rag.ingestion.RagIngestionSidecar;
 import com.gen.ai.infrastructure.rag.pipeline.KnowledgeImportPipeline;
 import com.gen.ai.infrastructure.rag.revision.KnowledgeRevisionFingerprinter;
-import com.gen.ai.rag.WiseLinkMultiQueryExpander;
+import com.gen.ai.infrastructure.rag.query.WiseLinkMultiQueryExpander;
 
 import lombok.extern.slf4j.Slf4j;
 

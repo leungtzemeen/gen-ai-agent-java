@@ -1,4 +1,4 @@
-package com.gen.ai.infrastructure.tool;
+package com.gen.ai.infrastructure.agent.toolcallback;
 
 import java.util.concurrent.atomic.AtomicInteger;
 

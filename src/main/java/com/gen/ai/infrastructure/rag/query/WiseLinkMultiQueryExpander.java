@@ -1,4 +1,4 @@
-package com.gen.ai.rag;
+package com.gen.ai.infrastructure.rag.query;
 
 import java.util.ArrayList;
 import java.util.List;

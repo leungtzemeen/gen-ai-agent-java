@@ -36,8 +36,8 @@ import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.DependsOn;
 
 import com.gen.ai.config.StorageProperties;
-import com.gen.ai.infrastructure.tool.PerRequestToolBudgetToolCallback;
-import com.gen.ai.infrastructure.tool.ToolCallbackComposition;
+import com.gen.ai.infrastructure.agent.toolcallback.PerRequestToolBudgetToolCallback;
+import com.gen.ai.infrastructure.agent.toolcallback.ToolCallbackComposition;
 import com.gen.ai.wiselink.WiseLinkToolFactory;
 import com.gen.ai.wiselink.security.tool.VipRestrictedToolCallback;
 

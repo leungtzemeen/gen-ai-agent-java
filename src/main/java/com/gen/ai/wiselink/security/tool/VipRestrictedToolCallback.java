@@ -9,8 +9,8 @@ import com.gen.ai.wiselink.security.WiseLinkToolSecurityInterceptor;
 import lombok.extern.slf4j.Slf4j;
 
 /**
- * VIP 专属工具的执行前校验装饰；可与 {@link com.gen.ai.infrastructure.tool.TruncationToolCallback}
- * 通过 {@link com.gen.ai.infrastructure.tool.ToolCallbackComposition} 组合（截断通常在外层）。
+ * VIP 专属工具的执行前校验装饰；可与 {@link com.gen.ai.infrastructure.agent.toolcallback.TruncationToolCallback}
+ * 通过 {@link com.gen.ai.infrastructure.agent.toolcallback.ToolCallbackComposition} 组合（截断通常在外层）。
  */
 @Slf4j
 public final class VipRestrictedToolCallback implements ToolCallback {
