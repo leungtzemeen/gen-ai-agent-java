@@ -6,6 +6,7 @@ import java.util.Objects;
 
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.chat.memory.ChatMemory;
+import org.springframework.ai.chat.model.ChatResponse;
 import org.springframework.ai.rag.retrieval.search.VectorStoreDocumentRetriever;
 import org.springframework.ai.vectorstore.filter.Filter;
 import org.springframework.ai.vectorstore.filter.FilterExpressionBuilder;
@@ -29,9 +30,13 @@ import lombok.extern.slf4j.Slf4j;
  * Phase 3：每外层步调用一次 {@link ChatClient}（Spring AI 可在本步内完成 tool 内层循环），装配与
  * {@link com.gen.ai.application.shopping.AiShoppingGuideApp#doChat} 对齐的 system / tools / memory / 分区过滤。
  * <p>
- * <strong>终止策略（MVP）</strong>：当前实现为「每步调用一次模型后，仅在最外层最后一步
- * {@code stepIndex == request.maxSteps()} 时返回 {@link MinusTerminationReason#MODEL_DONE}」；中间步一律
- * {@link MinusStepOutcome#continueRun}，由编排层控制总步数。后续可扩展为解析模型/工具显式结束信号。
+ * <strong>终止策略</strong>：每步一次 {@code call()}（含 Spring AI 内层工具循环）后：
+ * <ul>
+ *   <li>若 {@link ChatResponse#hasToolCalls()} 为 {@code false}，视为本步已给出最终自然语言、未再请求新工具，
+ *       结束外层 Minus（避免「任务已完成」仍跑满 {@code maxSteps}）。</li>
+ *   <li>若仍请求工具，则继续外层步，直至达到 {@link MinusRunRequest#maxSteps()}。</li>
+ *   <li>命中工具预算断路文案或已达 {@code maxSteps} 时同样结束。</li>
+ * </ul>
  */
 @Component
 @RequiredArgsConstructor
@@ -90,11 +95,22 @@ public final class SpringAiMinusStepExecutor implements MinusStepExecutor {
                             }
                         });
 
-        String text = spec.call().content();
+        ChatClient.CallResponseSpec callResponse = spec.call();
+        // 只走一次 CallResponseSpec：先取 chatResponse；勿在 content() 之后再调 chatResponse()，否则会触发
+        // DefaultAroundAdvisorChain「No CallAdvisors available to execute」（链已耗尽）。
+        ChatResponse chatResponse = callResponse.chatResponse();
+        String text = extractAssistantText(chatResponse);
         String preview = summarizeForUi(text);
 
         if (text != null && text.contains("本用户请求内所有工具调用额度已用尽")) {
             log.warn(">>>> [Minus-StepExecutor] step={} 命中工具预算断路提示，结束 Minus", stepIndex);
+            return MinusStepOutcome.finish(MinusTerminationReason.MODEL_DONE, preview);
+        }
+
+        if (chatResponse != null && !chatResponse.hasToolCalls()) {
+            log.info(
+                    ">>>> [Minus-StepExecutor] step={} 本步最终回复未再请求工具调用（hasToolCalls=false），结束 Minus 外层循环",
+                    stepIndex);
             return MinusStepOutcome.finish(MinusTerminationReason.MODEL_DONE, preview);
         }
 
@@ -106,12 +122,24 @@ public final class SpringAiMinusStepExecutor implements MinusStepExecutor {
         return MinusStepOutcome.continueRun(preview);
     }
 
+    private static String extractAssistantText(ChatResponse chatResponse) {
+        if (chatResponse == null
+                || chatResponse.getResult() == null
+                || chatResponse.getResult().getOutput() == null) {
+            return "";
+        }
+        String t = chatResponse.getResult().getOutput().getText();
+        return t != null ? t : "";
+    }
+
+    /**
+     * 写入 {@link com.gen.ai.application.minus.api.MinusStepEvent} / {@link com.gen.ai.application.minus.api.MinusRunResult}
+     * 的可见文本：须为<strong>完整</strong>助手回复（勿截断），否则 SSE 与 {@code event: done} 里用户只看到片段。
+     */
     private static String summarizeForUi(String text) {
         if (text == null || text.isBlank()) {
             return "<empty assistant content>";
         }
-        String t = text.strip();
-        int max = 400;
-        return t.length() <= max ? t : t.substring(0, max) + "…";
+        return text.strip();
     }
 }

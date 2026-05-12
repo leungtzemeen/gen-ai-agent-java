@@ -13,7 +13,8 @@ import com.gen.ai.application.minus.runtime.LoggingMinusStepEventSink;
 import com.gen.ai.application.minus.runtime.NoOpMinusStepEventSink;
 
 /**
- * Minus 编排 Bean：Phase 4 起可将 {@link MinusStepEventSink} 换为 SSE 实现；当前默认日志 + 吞事件。
+ * Minus 编排 Bean：默认 {@link MinusStepEventSink} 为日志 + 吞事件；HTTP Minus 见
+ * {@link com.gen.ai.application.minus.runtime.MinusChatSseService}（每请求自建 Sink，不经此 Bean）。
  */
 @Configuration
 public class MinusOrchestrationConfiguration {

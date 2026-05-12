@@ -7,7 +7,7 @@ package com.gen.ai.application.minus.api;
  */
 public enum MinusTerminationReason {
 
-    /** 模型 / 执行器声明本步之后无需再跑（Phase 3 细化：无 tool、或显式终止工具等）。 */
+    /** 模型 / 执行器声明本步之后无需再跑外层步（含：本步最终回复未再请求工具、或已达 maxSteps 等）。 */
     MODEL_DONE,
 
     /** 达到 {@link MinusRunRequest#maxSteps()} 上限仍未声明结束。 */

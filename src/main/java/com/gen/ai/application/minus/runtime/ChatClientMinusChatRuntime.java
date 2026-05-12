@@ -24,7 +24,7 @@ public final class ChatClientMinusChatRuntime implements MinusChatRuntime {
         this.debugId = debugId;
     }
 
-    @Override
+    @Override 
     public String runtimeDebugId() {
         return debugId;
     }

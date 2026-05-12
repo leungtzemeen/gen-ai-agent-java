@@ -85,7 +85,7 @@ public final class DefaultMinusOrchestrator implements MinusOrchestrator {
                 MinusTerminationReason reason =
                         outcome.terminationReason().orElse(MinusTerminationReason.MODEL_DONE);
                 log.info(
-                        ">>>> [Minus-Orchestrator] 任务提前结束 step={} reason={} summary={}",
+                        ">>>> [Minus-Orchestrator] 任务结束 step={} reason={} summary={}",
                         step,
                         reason,
                         lastSummary);

@@ -1,9 +1,7 @@
 package com.gen.ai.web;
 
-import java.util.List;
-
-import org.springframework.ai.document.Document;
 import org.springframework.http.MediaType;
+import org.springframework.http.codec.ServerSentEvent;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -11,6 +9,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
+import com.gen.ai.application.minus.runtime.MinusChatSseService;
 import com.gen.ai.application.shopping.AiShoppingGuideApp;
 import com.gen.ai.infrastructure.rag.service.RagDataService;
 
@@ -30,6 +29,25 @@ public class AiShoppingGuideController {
 
     private final AiShoppingGuideApp aiShoppingGuideApp;
     private final RagDataService ragDataService;
+    private final MinusChatSseService minusChatSseService;
+
+    /**
+     * Minus 多步编排：独立路径 {@code /ai/chat/minus}；SSE 使用命名事件 {@code minus}（JSON 步事件）与
+     * {@code done}（收尾摘要）。普通流式仍为 {@link #chat(String, String, String)} {@code /ai/chat}。
+     */
+    @GetMapping(value = "/chat/minus", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
+    @Operation(
+            summary = "智能对话（Minus 多步，SSE 步事件）",
+            description =
+                    "路径 {@code /ai/chat/minus}；SSE：event: minus 为 MinusStepEvent JSON；event: done 为整次任务收尾。"
+                            + "参数 prompt、sessionId、category 与流式导购一致；maxSteps 为外层步上限（默认 5）。")
+    public Flux<ServerSentEvent<String>> chatMinus(
+            @RequestParam("prompt") String prompt,
+            @RequestParam(value = "sessionId", defaultValue = "default") String sessionId,
+            @RequestParam(value = "category", required = false) String category,
+            @RequestParam(value = "maxSteps", defaultValue = "5") int maxSteps) {
+        return minusChatSseService.stream(prompt, sessionId, category, maxSteps);
+    }
 
     @GetMapping(value = "/chat", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
     @Operation(
