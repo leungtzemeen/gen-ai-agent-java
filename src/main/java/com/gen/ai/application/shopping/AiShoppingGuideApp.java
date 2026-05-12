@@ -9,16 +9,13 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.regex.Pattern;
 
 import org.springframework.ai.chat.client.ChatClient;
-import org.springframework.ai.chat.client.advisor.MessageChatMemoryAdvisor;
 import org.springframework.ai.chat.memory.ChatMemory;
-import org.springframework.ai.rag.advisor.RetrievalAugmentationAdvisor;
 import org.springframework.ai.rag.retrieval.search.VectorStoreDocumentRetriever;
 import org.springframework.ai.vectorstore.filter.Filter;
 import org.springframework.ai.vectorstore.filter.FilterExpressionBuilder;
 import org.springframework.core.io.Resource;
 import org.springframework.stereotype.Component;
 
-import com.gen.ai.advisor.AppLoggerAdvisor;
 import com.gen.ai.common.exception.SensitivePromptException;
 import com.gen.ai.infrastructure.mcp.McpClientConfig.ShoppingGuideMergedToolCallbacks;
 import com.gen.ai.infrastructure.security.SensitiveWordService;
@@ -57,21 +54,14 @@ public class AiShoppingGuideApp {
     private final ShoppingGuideMergedToolCallbacks shoppingGuideMergedToolCallbacks;
 
     public AiShoppingGuideApp(
-            ChatClient.Builder chatClientBuilder,
-            ChatMemory chatMemory,
-            RetrievalAugmentationAdvisor wiseLinkRetrievalAugmentationAdvisor,
+            ShoppingGuideChatClientFactory shoppingGuideChatClientFactory,
             AssistantGuidePromptBundle assistantGuidePromptBundle,
             SensitiveWordService sensitiveWordService,
             ShoppingGuideMergedToolCallbacks shoppingGuideMergedToolCallbacks) {
         this.assistantGuidePromptBundle = assistantGuidePromptBundle;
         this.sensitiveWordService = sensitiveWordService;
         this.shoppingGuideMergedToolCallbacks = shoppingGuideMergedToolCallbacks;
-        this.chatClient = chatClientBuilder
-                .defaultAdvisors(
-                        MessageChatMemoryAdvisor.builder(Objects.requireNonNull(chatMemory)).build(),
-                        wiseLinkRetrievalAugmentationAdvisor,
-                        new AppLoggerAdvisor())
-                .build();
+        this.chatClient = shoppingGuideChatClientFactory.buildFrozenClient("AiShoppingGuideApp");
     }
 
     @PostConstruct

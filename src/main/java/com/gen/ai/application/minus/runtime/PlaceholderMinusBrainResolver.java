@@ -7,10 +7,8 @@ import com.gen.ai.application.minus.api.MinusRunRequest;
 import lombok.extern.slf4j.Slf4j;
 
 /**
- * Phase 1 默认 {@link MinusBrainResolver}：返回占位运行时，保证编排层已具备「单次 resolve」调用点。
- * <p>
- * Phase 2 起可替换为从 {@link org.springframework.ai.chat.client.ChatClient.Builder} 构建的真实运行时；
- * {@link com.gen.ai.application.minus.orchestration.DefaultMinusOrchestrator} 保证整次任务仅调用一次 {@link #resolve}。
+ * Phase 1 单元测试用占位 {@link com.gen.ai.application.minus.api.MinusBrainResolver}；Spring 生产环境请使用
+ * {@link DefaultMinusBrainResolver}。
  */
 @Slf4j
 public final class PlaceholderMinusBrainResolver implements MinusBrainResolver {
