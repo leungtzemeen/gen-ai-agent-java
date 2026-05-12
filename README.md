@@ -108,6 +108,16 @@ flowchart LR
 
 分层上：**`infrastructure`** 偏技术与横切；**`wiselink`** 偏 WiseLink 插件域内的注册、注解、业务工具与安全装饰。
 
+### Minus 模式：多步循环下的模型选择（Phase 4 HTTP 已接）
+
+若实现 **Minus**（外层显式多步、每步再调 `ChatClient`），须遵守以下约定，避免历史上曾出现的问题：**第 1 步用了用户指定的模型（如 Ollama），第 2 步又落回容器默认的百炼（DashScope），导致云端 token 被误烧**。
+
+- **原则**：**模型选择在循环外解析一次，循环内只消费同一个 `ChatClient` / `ChatModel`。**  
+  即在进入 `while` / `for` 多步循环之前，根据用户选择（或会话策略）**固定**解析出本次任务要用的那条模型链路；循环内每一步 **禁止** 再无参 `ChatClient.builder().build()` 或仅依赖 `@Primary` `ChatModel` 重新取默认实现。
+- **延伸检查**：RAG / Advisor 等若会**单独**发起 LLM 调用，须确认其使用的也是**同一条**模型配置，否则会表现为「某一步悄悄换了大脑」。
+- **流程与 RAG 策略的图示说明**：见 [`docs/MINUS-ARCHITECTURE.md`](./docs/MINUS-ARCHITECTURE.md)。
+- **分阶段实现设计（接口、包结构、Phase 1～5、扩展点）**：见 [`docs/MINUS-DESIGN-PHASES.md`](./docs/MINUS-DESIGN-PHASES.md)。**Phase 1～3** 已在 `com.gen.ai.application.minus` 落地。**Phase 4 HTTP**：`GET /ai/chat/minus` 或 **`GET /ai/minus`**（配合 `server.servlet.context-path: /api` 时为 **`/api/ai/chat/minus`** / **`/api/ai/minus`**）`?prompt=...&sessionId=...&category=...&maxSteps=5`（`text/event-stream`），与普通流式 `GET /ai/chat` 分路径；SSE 事件名 `minus`（步事件 JSON）与 `done`（收尾）；敏感词与现网流式导购一致。**Phase 5**（观测、工具预算累计、文档与交叉引用）：见同一文档 Phase 5；运维可 grep 前缀 `>>>> [Minus-`。
+
 ---
 
 ## 5. 快速开始

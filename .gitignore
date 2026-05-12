@@ -40,9 +40,6 @@ exports/
 # WiseLink downloads (user-requested attachments)
 downloads/
 
-# Local docs (not committed)
-docs/
-
 # storage files
 **/data/
 *.kryo

@@ -9,7 +9,3 @@
 /target/
 .git/
 node_modules/
-
-# Local docs (not indexed)
-/docs/
-
