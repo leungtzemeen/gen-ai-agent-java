@@ -13,7 +13,7 @@ import lombok.extern.slf4j.Slf4j;
 
 /**
  * 从 {@link AssistantGuidePromptBundle} 加载静态人设系统提示文本，供 {@link AiShoppingGuideApp} 与
- * {@link com.gen.ai.application.minus.runtime.SpringAiMinusStepExecutor} 共用，避免复制 IO 与错误处理。
+ * {@link com.gen.ai.application.manus.runtime.SpringAiManusStepExecutor} 共用，避免复制 IO 与错误处理。
  */
 @Slf4j
 public final class AssistantGuidePersonaLoader {
