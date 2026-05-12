@@ -64,7 +64,9 @@ public final class SpringAiManusStepExecutor implements ManusStepExecutor {
         ManusRunRequest request = context.request();
         ChatClient client = runtime.selectForStep(stepIndex, ragParticipationPolicy);
         log.info(
-                ">>>> [Manus-StepExecutor] step={} ragPolicy={} selectedClientHash={} toolBudgetCounterHash={}",
+                ">>>> [Manus-StepExecutor] traceId={} activeBrain={} step={} ragPolicy={} selectedClientHash={} toolBudgetCounterHash={}",
+                context.traceId(),
+                context.chatRuntime().activeBrainTag().orElse("-"),
                 stepIndex,
                 ragParticipationPolicy.useRag(stepIndex),
                 System.identityHashCode(client),
@@ -112,7 +114,7 @@ public final class SpringAiManusStepExecutor implements ManusStepExecutor {
         boolean pendingTools = chatResponse != null && chatResponse.hasToolCalls();
 
         if (text != null && text.contains("本用户请求内所有工具调用额度已用尽")) {
-            log.warn(">>>> [Manus-StepExecutor] step={} 命中工具预算断路提示，结束 Manus", stepIndex);
+            log.warn(">>>> [Manus-StepExecutor] traceId={} step={} 命中工具预算断路提示，结束 Manus", context.traceId(), stepIndex);
             return ManusStepOutcome.finish(
                     ManusTerminationReason.MODEL_DONE,
                     preview,
@@ -123,7 +125,8 @@ public final class SpringAiManusStepExecutor implements ManusStepExecutor {
 
         if (chatResponse != null && !chatResponse.hasToolCalls()) {
             log.info(
-                    ">>>> [Manus-StepExecutor] step={} 本步最终回复未再请求工具调用（hasToolCalls=false），结束 Manus 外层循环",
+                    ">>>> [Manus-StepExecutor] traceId={} step={} 本步最终回复未再请求工具调用（hasToolCalls=false），结束 Manus 外层循环",
+                    context.traceId(),
                     stepIndex);
             return ManusStepOutcome.finish(
                     ManusTerminationReason.MODEL_DONE,
@@ -134,7 +137,7 @@ public final class SpringAiManusStepExecutor implements ManusStepExecutor {
         }
 
         if (stepIndex >= request.maxSteps()) {
-            log.info(">>>> [Manus-StepExecutor] step={} 已达 request.maxSteps，结束 Manus", stepIndex);
+            log.info(">>>> [Manus-StepExecutor] traceId={} step={} 已达 request.maxSteps，结束 Manus", context.traceId(), stepIndex);
             return ManusStepOutcome.finish(
                     ManusTerminationReason.MODEL_DONE,
                     preview,

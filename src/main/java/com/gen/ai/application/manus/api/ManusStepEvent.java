@@ -1,5 +1,6 @@
 package com.gen.ai.application.manus.api;
 
+import java.util.Objects;
 import java.util.Optional;
 
 /**
@@ -13,6 +14,8 @@ import java.util.Optional;
  * @param latencyMs             可选：本步执行耗时毫秒（由 {@link ManusStepExecutor} 填入 STEP_OUTCOME）
  * @param messageType           载荷类别，便于前端分区渲染
  * @param hasPendingToolCalls   可选：本步返回后是否仍声明需要工具调用（与 Spring AI {@code ChatResponse#hasToolCalls()} 对齐）
+ * @param traceId               Phase C：单次 run 关联 ID，可与 HTTP 请求头对齐（由编排层写入）
+ * @param activeBrainTag        Phase C：与 {@link ManusChatRuntime#activeBrainTag()} 一致，便于前端展示当前大脑
  */
 public record ManusStepEvent(
         ManusStepPhase phase,
@@ -22,7 +25,27 @@ public record ManusStepEvent(
         Optional<Boolean> ragOn,
         Optional<Long> latencyMs,
         Optional<ManusStepMessageType> messageType,
-        Optional<Boolean> hasPendingToolCalls) {
+        Optional<Boolean> hasPendingToolCalls,
+        Optional<String> traceId,
+        Optional<String> activeBrainTag) {
+
+    /**
+     * 由编排层在发出前绑定本次 run 的遥测字段；工厂方法产出的「裸」事件 trace/brain 为空。
+     */
+    public ManusStepEvent withRunTelemetry(String traceId, Optional<String> activeBrainTag) {
+        Objects.requireNonNull(traceId, "traceId");
+        return new ManusStepEvent(
+                phase,
+                stepIndex,
+                summary,
+                toolHint,
+                ragOn,
+                latencyMs,
+                messageType,
+                hasPendingToolCalls,
+                Optional.of(traceId),
+                activeBrainTag != null ? activeBrainTag : Optional.empty());
+    }
 
     public static ManusStepEvent runStarted(String summary) {
         return new ManusStepEvent(
@@ -33,6 +56,8 @@ public record ManusStepEvent(
                 Optional.empty(),
                 Optional.empty(),
                 Optional.of(ManusStepMessageType.META),
+                Optional.empty(),
+                Optional.empty(),
                 Optional.empty());
     }
 
@@ -46,6 +71,8 @@ public record ManusStepEvent(
                 Optional.empty(),
                 Optional.empty(),
                 Optional.of(ManusStepMessageType.PLAN_SNIPPET),
+                Optional.empty(),
+                Optional.empty(),
                 Optional.empty());
     }
 
@@ -63,6 +90,8 @@ public record ManusStepEvent(
                 Optional.of(ragOn),
                 Optional.empty(),
                 Optional.of(ManusStepMessageType.META),
+                Optional.empty(),
+                Optional.empty(),
                 Optional.empty());
     }
 
@@ -82,7 +111,9 @@ public record ManusStepEvent(
                 Optional.of(ragOn),
                 latencyMs,
                 Optional.of(messageType),
-                hasPendingToolCalls);
+                hasPendingToolCalls,
+                Optional.empty(),
+                Optional.empty());
     }
 
     public static ManusStepEvent runFinished(String summary, ManusTerminationReason reason) {
@@ -95,6 +126,8 @@ public record ManusStepEvent(
                 Optional.empty(),
                 Optional.empty(),
                 Optional.of(ManusStepMessageType.META),
+                Optional.empty(),
+                Optional.empty(),
                 Optional.empty());
     }
 }

@@ -46,7 +46,7 @@ public final class LlmManusPlanner implements ManusPlanner {
             String stripped = text.strip();
             return stripped.isEmpty() ? Optional.empty() : Optional.of(stripped);
         } catch (Exception e) {
-            log.warn(">>>> [Manus-Planner] planBrief 调用失败，跳过计划事件: {}", e.toString());
+            log.warn(">>>> [Manus-Planner] traceId={} planBrief 调用失败，跳过计划事件: {}", context.traceId(), e.toString());
             return Optional.empty();
         }
     }

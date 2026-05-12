@@ -60,6 +60,9 @@ class DefaultManusOrchestratorTest {
                 ManusStepPhase.STEP_STARTED,
                 ManusStepPhase.STEP_OUTCOME,
                 ManusStepPhase.RUN_FINISHED);
+
+        String traceId = events.getFirst().traceId().orElseThrow();
+        assertThat(events).allMatch(e -> e.traceId().filter(traceId::equals).isPresent());
     }
 
     @Test

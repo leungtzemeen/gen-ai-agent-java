@@ -24,4 +24,12 @@ public interface ManusChatRuntime {
     default Optional<ChatClient> frozenChatClient() {
         return Optional.empty();
     }
+
+    /**
+     * Phase C：当前任务解析时绑定的「大脑」标签（如 {@code wiselink.active-brain}），供日志与 SSE 关联；占位实现默认
+     * empty，路由扩展时由 {@link ManusBrainResolver} 实现类写入。
+     */
+    default Optional<String> activeBrainTag() {
+        return Optional.empty();
+    }
 }

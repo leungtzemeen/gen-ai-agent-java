@@ -196,6 +196,20 @@ com.gen.ai.application.manus
 
 ---
 
+### Phase C — 单次 run 遥测（`traceId` + `activeBrainTag`）✅
+
+**目标**：在**不改变**「循环外一次 `resolve`」、双 `ChatClient` RAG 策略、工具预算共享语义的前提下，为整次 Manus run 分配稳定 **`traceId`**（当前为 UUID 字符串），并把 **`activeBrainTag`**（与 `wiselink.active-brain` / 冻结 `ManusChatRuntime` 一致）写入 **编排日志、`ManusStepEvent`（经 SSE JSON）、`SpringAiManusStepExecutor` / `LoggingManusStepEventSink` 日志**；为日后 HTTP 头对齐与 `RouterManusBrainResolver` 预留同一字段。
+
+**交付物**：
+
+- `ManusRunContext#traceId()`；`DefaultManusOrchestrator` 在 `run` 入口生成并贯穿 `emit(...)`；`ManusStepEvent#withRunTelemetry` 在 sink 前绑定。
+- `ManusChatRuntime#activeBrainTag()`（默认 empty）；`ChatClientManusChatRuntime` / `DefaultManusBrainResolver` 传入解析时的大脑标签。
+- `ManusStepEventDto`：`traceId`、`activeBrainTag`（Jackson 可省略 null）；`JsonSseManusStepEventSinkTest` 覆盖带遥测序列化。
+
+**验收**：同一次 run 内所有 sink 事件共享同一 `traceId`（见 `DefaultManusOrchestratorTest`）；SSE JSON 在编排注入后可读到 `traceId`（及有配置时的 `activeBrainTag`）。
+
+---
+
 ## 4. 与 `AiShoppingGuideApp` 的关系（避免重复造轮子）
 
 | 方式 | 说明 |

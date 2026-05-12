@@ -1,5 +1,8 @@
 package com.gen.ai.application.manus.orchestration;
 
+import java.util.UUID;
+import java.util.concurrent.atomic.AtomicInteger;
+
 import com.gen.ai.application.manus.api.ManusBrainResolver;
 import com.gen.ai.application.manus.api.ManusPlanner;
 import com.gen.ai.application.manus.api.ManusRunContext;
@@ -12,8 +15,6 @@ import com.gen.ai.application.manus.api.ManusStepMessageType;
 import com.gen.ai.application.manus.api.ManusStepOutcome;
 import com.gen.ai.application.manus.api.ManusTerminationReason;
 import com.gen.ai.application.manus.policy.RagParticipationPolicy;
-
-import java.util.concurrent.atomic.AtomicInteger;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -28,6 +29,8 @@ import lombok.extern.slf4j.Slf4j;
  *       避免「每外层一步重置预算」导致工具滥用或计数失真。</li>
  *   <li>Phase B：可选 {@link ManusPlanner} 在首步前产出 {@link com.gen.ai.application.manus.api.ManusStepPhase#PLAN_SNIPPET}，
  *       不得写入 ChatMemory。</li>
+ *   <li>Phase C：单次 {@code run} 生成 {@link ManusRunContext#traceId()}，经 {@link ManusStepEvent#withRunTelemetry} 写入各
+ *       SSE 事件；{@code activeBrainTag} 来自 {@link com.gen.ai.application.manus.api.ManusChatRuntime#activeBrainTag()}。</li>
  * </ul>
  */
 @Slf4j
@@ -42,29 +45,35 @@ public final class DefaultManusOrchestrator implements ManusOrchestrator {
 
     @Override
     public ManusRunResult run(ManusRunRequest request) {
+        String traceId = UUID.randomUUID().toString();
         log.info(
-                ">>>> [Manus-Orchestrator] 开始任务 chatId={} maxSteps={} category={}",
+                ">>>> [Manus-Orchestrator] 开始任务 traceId={} chatId={} maxSteps={} category={}",
+                traceId,
                 request.chatId(),
                 request.maxSteps(),
                 request.category() == null ? "<none>" : request.category());
 
         AtomicInteger manusTaskToolBudget = new AtomicInteger(0);
-        ManusRunContext context = new ManusRunContext(request, brainResolver.resolve(request), manusTaskToolBudget);
+        ManusRunContext context =
+                new ManusRunContext(request, brainResolver.resolve(request), manusTaskToolBudget, traceId);
         log.info(
-                ">>>> [Manus-Orchestrator] 已创建整任务工具预算计数器 identityHashCode={}（供 PerRequestToolBudget 全步共享）",
+                ">>>> [Manus-Orchestrator] traceId={} 已创建整任务工具预算计数器 identityHashCode={}（供 PerRequestToolBudget 全步共享）",
+                traceId,
                 System.identityHashCode(manusTaskToolBudget));
         log.info(
-                ">>>> [Manus-Orchestrator] 已冻结运行时 runtimeDebugId={}（本方法内不再调用 resolve）",
+                ">>>> [Manus-Orchestrator] traceId={} 已冻结运行时 runtimeDebugId={}（本方法内不再调用 resolve）",
+                traceId,
                 context.chatRuntime().runtimeDebugId());
 
-        stepEventSink.onEvent(
+        emit(
+                context,
                 ManusStepEvent.runStarted("Manus run started for chatId=" + request.chatId()));
 
         manusPlanner
                 .planBrief(context)
                 .map(String::strip)
                 .filter(s -> !s.isBlank())
-                .ifPresent(text -> stepEventSink.onEvent(ManusStepEvent.planSnippet(text)));
+                .ifPresent(text -> emit(context, ManusStepEvent.planSnippet(text)));
 
         int executed = 0;
         String lastSummary = "";
@@ -72,13 +81,15 @@ public final class DefaultManusOrchestrator implements ManusOrchestrator {
         for (int step = 1; step <= request.maxSteps(); step++) {
             boolean ragOn = ragParticipationPolicy.useRag(step);
             log.info(
-                    ">>>> [Manus-Orchestrator] 外层 step={}/{} ragOn={} runtimeId={}",
+                    ">>>> [Manus-Orchestrator] traceId={} 外层 step={}/{} ragOn={} runtimeId={}",
+                    traceId,
                     step,
                     request.maxSteps(),
                     ragOn,
                     context.chatRuntime().runtimeDebugId());
 
-            stepEventSink.onEvent(
+            emit(
+                    context,
                     ManusStepEvent.stepStarted(step, "Step " + step + " starting (rag=" + ragOn + ")", ragOn));
 
             ManusStepOutcome outcome = stepExecutor.execute(context, step);
@@ -88,7 +99,8 @@ public final class DefaultManusOrchestrator implements ManusOrchestrator {
             boolean pendingTools = outcome.hasPendingToolCalls().orElse(false);
             ManusStepMessageType payloadKind =
                     pendingTools ? ManusStepMessageType.TOOL : ManusStepMessageType.MODEL;
-            stepEventSink.onEvent(
+            emit(
+                    context,
                     ManusStepEvent.stepOutcome(
                             step,
                             outcome.stepSummaryForUi(),
@@ -102,21 +114,28 @@ public final class DefaultManusOrchestrator implements ManusOrchestrator {
                 ManusTerminationReason reason =
                         outcome.terminationReason().orElse(ManusTerminationReason.MODEL_DONE);
                 log.info(
-                        ">>>> [Manus-Orchestrator] 任务结束 step={} reason={} summary={}",
+                        ">>>> [Manus-Orchestrator] traceId={} 任务结束 step={} reason={} summary={}",
+                        traceId,
                         step,
                         reason,
                         lastSummary);
-                stepEventSink.onEvent(ManusStepEvent.runFinished("run finished after step " + step, reason));
+                emit(context, ManusStepEvent.runFinished("run finished after step " + step, reason));
                 return new ManusRunResult(lastSummary, reason, executed);
             }
         }
 
         log.warn(
-                ">>>> [Manus-Orchestrator] 达到 maxSteps={} 仍未声明结束，返回 MAX_STEPS。runtimeId={}",
+                ">>>> [Manus-Orchestrator] traceId={} 达到 maxSteps={} 仍未声明结束，返回 MAX_STEPS。runtimeId={}",
+                traceId,
                 request.maxSteps(),
                 context.chatRuntime().runtimeDebugId());
-        stepEventSink.onEvent(
+        emit(
+                context,
                 ManusStepEvent.runFinished("reached max steps " + request.maxSteps(), ManusTerminationReason.MAX_STEPS));
         return new ManusRunResult(lastSummary, ManusTerminationReason.MAX_STEPS, executed);
+    }
+
+    private void emit(ManusRunContext ctx, ManusStepEvent event) {
+        stepEventSink.onEvent(event.withRunTelemetry(ctx.traceId(), ctx.chatRuntime().activeBrainTag()));
     }
 }

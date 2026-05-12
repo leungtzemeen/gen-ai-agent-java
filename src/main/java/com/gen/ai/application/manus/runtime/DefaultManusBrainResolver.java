@@ -1,5 +1,7 @@
 package com.gen.ai.application.manus.runtime;
 
+import java.util.Optional;
+
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
@@ -49,6 +51,6 @@ public class DefaultManusBrainResolver implements ManusBrainResolver {
                 activeBrainTag,
                 System.identityHashCode(withRag),
                 System.identityHashCode(withoutRag));
-        return new ChatClientManusChatRuntime(withRag, withoutRag, debugId);
+        return new ChatClientManusChatRuntime(withRag, withoutRag, debugId, Optional.ofNullable(activeBrainTag));
     }
 }

@@ -13,7 +13,9 @@ public record ManusStepEventDto(
         Boolean ragOn,
         Long latencyMs,
         String messageType,
-        Boolean hasPendingToolCalls) {
+        Boolean hasPendingToolCalls,
+        String traceId,
+        String activeBrainTag) {
 
     static ManusStepEventDto from(ManusStepEvent event) {
         return new ManusStepEventDto(
@@ -24,6 +26,8 @@ public record ManusStepEventDto(
                 event.ragOn().orElse(null),
                 event.latencyMs().orElse(null),
                 event.messageType().map(Enum::name).orElse(null),
-                event.hasPendingToolCalls().orElse(null));
+                event.hasPendingToolCalls().orElse(null),
+                event.traceId().orElse(null),
+                event.activeBrainTag().orElse(null));
     }
 }

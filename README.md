@@ -116,7 +116,7 @@ flowchart LR
   即在进入 `while` / `for` 多步循环之前，根据用户选择（或会话策略）**固定**解析出本次任务要用的那条模型链路；循环内每一步 **禁止** 再无参 `ChatClient.builder().build()` 或仅依赖 `@Primary` `ChatModel` 重新取默认实现。
 - **延伸检查**：RAG / Advisor 等若会**单独**发起 LLM 调用，须确认其使用的也是**同一条**模型配置，否则会表现为「某一步悄悄换了大脑」。
 - **流程与 RAG 策略的图示说明**：见 [`docs/MANUS-ARCHITECTURE.md`](./docs/MANUS-ARCHITECTURE.md)。
-- **分阶段实现设计（接口、包结构、Phase 1～5、扩展点）**：见 [`docs/MANUS-DESIGN-PHASES.md`](./docs/MANUS-DESIGN-PHASES.md)。**Phase 1～3** 已在 `com.gen.ai.application.manus` 落地。**Phase 4 HTTP**：`GET /ai/chat/manus` 或 **`GET /ai/manus`**（配合 `server.servlet.context-path: /api` 时为 **`/api/ai/chat/manus`** / **`/api/ai/manus`**）`?prompt=...&sessionId=...&category=...&maxSteps=5`（`text/event-stream`），与普通流式 `GET /ai/chat` 分路径；SSE 事件名 `manus`（步事件 JSON，含 Phase A 可观测字段；可选 **Phase B** `PLAN_SNIPPET`，由 `wiselink.manus.planner`=`noop`|`llm` 控制）与 `done`（收尾）；敏感词与现网流式导购一致。**Phase 5**（观测、工具预算累计、文档与交叉引用）：见同一文档 Phase 5；运维可 grep 前缀 `>>>> [Manus-`。
+- **分阶段实现设计（接口、包结构、Phase 1～5、扩展点）**：见 [`docs/MANUS-DESIGN-PHASES.md`](./docs/MANUS-DESIGN-PHASES.md)。**Phase 1～3** 已在 `com.gen.ai.application.manus` 落地。**Phase 4 HTTP**：`GET /ai/chat/manus` 或 **`GET /ai/manus`**（配合 `server.servlet.context-path: /api` 时为 **`/api/ai/chat/manus`** / **`/api/ai/manus`**）`?prompt=...&sessionId=...&category=...&maxSteps=5`（`text/event-stream`），与普通流式 `GET /ai/chat` 分路径；SSE 事件名 `manus`（步事件 JSON，含 Phase A 可观测字段与 **Phase C** `traceId` / `activeBrainTag`；可选 **Phase B** `PLAN_SNIPPET`，由 `wiselink.manus.planner`=`noop`|`llm` 控制）与 `done`（收尾）；敏感词与现网流式导购一致。**Phase 5**（观测、工具预算累计、文档与交叉引用）：见同一文档 Phase 5；运维可 grep 前缀 `>>>> [Manus-`。
 
 ---
 

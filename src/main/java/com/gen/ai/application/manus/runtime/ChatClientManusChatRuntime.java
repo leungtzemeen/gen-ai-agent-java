@@ -16,15 +16,20 @@ public final class ChatClientManusChatRuntime implements ManusChatRuntime {
     private final ChatClient chatClientWithRag;
     private final ChatClient chatClientWithoutRag;
     private final String debugId;
+    private final Optional<String> activeBrainTag;
 
     public ChatClientManusChatRuntime(
-            ChatClient chatClientWithRag, ChatClient chatClientWithoutRag, String debugId) {
+            ChatClient chatClientWithRag,
+            ChatClient chatClientWithoutRag,
+            String debugId,
+            Optional<String> activeBrainTag) {
         this.chatClientWithRag = chatClientWithRag;
         this.chatClientWithoutRag = chatClientWithoutRag;
         this.debugId = debugId;
+        this.activeBrainTag = activeBrainTag != null ? activeBrainTag : Optional.empty();
     }
 
-    @Override 
+    @Override
     public String runtimeDebugId() {
         return debugId;
     }
@@ -35,6 +40,11 @@ public final class ChatClientManusChatRuntime implements ManusChatRuntime {
     @Override
     public Optional<ChatClient> frozenChatClient() {
         return Optional.of(chatClientWithRag);
+    }
+
+    @Override
+    public Optional<String> activeBrainTag() {
+        return activeBrainTag;
     }
 
     public ChatClient selectForStep(int stepIndex, RagParticipationPolicy policy) {
