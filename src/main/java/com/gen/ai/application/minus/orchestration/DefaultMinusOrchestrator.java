@@ -12,6 +12,7 @@ import com.gen.ai.application.minus.api.MinusTerminationReason;
 import com.gen.ai.application.minus.policy.RagParticipationPolicy;
 
 import java.util.Optional;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -43,7 +44,11 @@ public final class DefaultMinusOrchestrator implements MinusOrchestrator {
                 request.maxSteps(),
                 request.category() == null ? "<none>" : request.category());
 
-        MinusRunContext context = new MinusRunContext(request, brainResolver.resolve(request));
+        AtomicInteger minusTaskToolBudget = new AtomicInteger(0);
+        MinusRunContext context = new MinusRunContext(request, brainResolver.resolve(request), minusTaskToolBudget);
+        log.info(
+                ">>>> [Minus-Orchestrator] 已创建整任务工具预算计数器 identityHashCode={}（供 PerRequestToolBudget 全步共享）",
+                System.identityHashCode(minusTaskToolBudget));
         log.info(
                 ">>>> [Minus-Orchestrator] 已冻结运行时 runtimeDebugId={}（本方法内不再调用 resolve）",
                 context.chatRuntime().runtimeDebugId());

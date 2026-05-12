@@ -33,18 +33,22 @@ public class DefaultMinusBrainResolver implements MinusBrainResolver {
     @Override
     public MinusChatRuntime resolve(MinusRunRequest request) {
         String label = "minus:chatId=" + request.chatId() + ":brain=" + activeBrainTag;
-        ChatClient client = shoppingGuideChatClientFactory.buildFrozenClient(label);
+        ChatClient withRag = shoppingGuideChatClientFactory.buildFrozenClient(label + "[rag]");
+        ChatClient withoutRag = shoppingGuideChatClientFactory.buildFrozenClientWithoutRag(label + "[norag]");
         String debugId =
                 label
-                        + ":client@"
-                        + Integer.toHexString(System.identityHashCode(client))
+                        + ":withRag@"
+                        + Integer.toHexString(System.identityHashCode(withRag))
+                        + ":noRag@"
+                        + Integer.toHexString(System.identityHashCode(withoutRag))
                         + ":modelTag="
                         + activeBrainTag;
         log.info(
-                ">>>> [Minus-Brain] resolve 一次冻结 ChatClient chatId={} activeBrain={} clientIdentityHashCode={}",
+                ">>>> [Minus-Brain] resolve 一次冻结双 ChatClient chatId={} activeBrain={} withRagHash={} noRagHash={}",
                 request.chatId(),
                 activeBrainTag,
-                System.identityHashCode(client));
-        return new ChatClientMinusChatRuntime(client, debugId);
+                System.identityHashCode(withRag),
+                System.identityHashCode(withoutRag));
+        return new ChatClientMinusChatRuntime(withRag, withoutRag, debugId);
     }
 }

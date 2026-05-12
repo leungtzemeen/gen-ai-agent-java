@@ -1,7 +1,5 @@
 package com.gen.ai.application.shopping;
 
-import java.io.IOException;
-import java.nio.charset.StandardCharsets;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Objects;
@@ -13,7 +11,6 @@ import org.springframework.ai.chat.memory.ChatMemory;
 import org.springframework.ai.rag.retrieval.search.VectorStoreDocumentRetriever;
 import org.springframework.ai.vectorstore.filter.Filter;
 import org.springframework.ai.vectorstore.filter.FilterExpressionBuilder;
-import org.springframework.core.io.Resource;
 import org.springframework.stereotype.Component;
 
 import com.gen.ai.common.exception.SensitivePromptException;
@@ -152,26 +149,7 @@ public class AiShoppingGuideApp {
      * 直接从微内核注册中心提取彻底脱水、无任何动态变量摩擦的纯净静态核心人设。
      */
     private String renderAssistantGuideSystemPrompt() {
-        try {
-            // 完美合龙：直接通过我们写好的強类型星图，秒级获取最纯净的人设人设文本
-            // 如果你的 SystemPrompt 也归口到了 Bundle 里，可以用它来优雅接货
-            Resource systemResource = assistantGuidePromptBundle.getSystemResource();
-
-            if (systemResource == null) {
-                return "";
-            }
-
-            // 利用 Spring 的工具类，直接将只读 Resource 转化为纯净字符串，不留任何魔法断层
-            String rendered = org.springframework.util.StreamUtils.copyToString(
-                    systemResource.getInputStream(),
-                    StandardCharsets.UTF_8);
-
-            return Objects.requireNonNullElse(rendered.strip(), "");
-
-        } catch (IOException e) {
-            log.error(">>>> [System-Prompt-Error] 核心人设物理文件加载失败，启动空字符兜底！", e);
-            return "";
-        }
+        return AssistantGuidePersonaLoader.loadPlainSystemPersona(assistantGuidePromptBundle);
     }
 
 }

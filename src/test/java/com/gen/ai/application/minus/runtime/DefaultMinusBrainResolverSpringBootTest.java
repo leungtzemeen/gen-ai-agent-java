@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -22,8 +23,8 @@ import com.gen.ai.application.minus.policy.FirstStepOnlyRagPolicy;
 import org.springframework.ai.chat.client.ChatClient;
 
 /**
- * Phase 2 验收：Spring 上下文中 {@link DefaultMinusBrainResolver} 解析出的 {@link ChatClient} 非空；
- * 同一次 Minus 编排多步内 {@link ChatClient} 引用一致。
+ * Phase 2/3 验收：Spring 上下文中 {@link DefaultMinusBrainResolver} 解析出的带 RAG {@link ChatClient} 非空；
+ * Phase 3：同一次 Minus 多步内第 1 步与第 2 步择不同 client（RAG / 无 RAG），工具预算计数器同一实例。
  */
 @SpringBootTest(properties = "spring.ai.mcp.client.enabled=false")
 @TestPropertySource(
@@ -45,12 +46,15 @@ class DefaultMinusBrainResolverSpringBootTest {
     }
 
     @Test
-    void orchestrator_twoSteps_sameChatClientInstance() {
+    void orchestrator_twoSteps_ragOnlyFirstStep_differentFrozenClients_sameToolBudget() {
         List<ChatClient> captured = new ArrayList<>();
+        List<AtomicInteger> budgets = new ArrayList<>();
+        FirstStepOnlyRagPolicy policy = new FirstStepOnlyRagPolicy();
         MinusStepExecutor executor =
                 (MinusRunContext ctx, int step) -> {
-                    ChatClient c = ctx.chatRuntime().frozenChatClient().orElseThrow();
-                    captured.add(c);
+                    var runtime = (ChatClientMinusChatRuntime) ctx.chatRuntime();
+                    captured.add(runtime.selectForStep(step, policy));
+                    budgets.add(ctx.minusTaskToolBudget());
                     return step >= 2
                             ? MinusStepOutcome.finish(MinusTerminationReason.MODEL_DONE, "done")
                             : MinusStepOutcome.continueRun("go-" + step);
@@ -58,11 +62,12 @@ class DefaultMinusBrainResolverSpringBootTest {
         MinusStepEventSink sink = e -> {};
 
         DefaultMinusOrchestrator orchestrator =
-                new DefaultMinusOrchestrator(defaultMinusBrainResolver, executor, sink, new FirstStepOnlyRagPolicy());
+                new DefaultMinusOrchestrator(defaultMinusBrainResolver, executor, sink, policy);
 
         orchestrator.run(new MinusRunRequest("q", "same-client-chat", null, 10));
 
         assertThat(captured).hasSize(2);
-        assertThat(captured.get(0)).isSameAs(captured.get(1));
+        assertThat(captured.get(0)).isNotSameAs(captured.get(1));
+        assertThat(budgets.get(0)).isSameAs(budgets.get(1));
     }
 }
