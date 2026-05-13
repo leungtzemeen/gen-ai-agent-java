@@ -15,7 +15,8 @@ public record ManusStepEventDto(
         String messageType,
         Boolean hasPendingToolCalls,
         String traceId,
-        String activeBrainTag) {
+        String activeBrainTag,
+        String summaryShort) {
 
     static ManusStepEventDto from(ManusStepEvent event) {
         return new ManusStepEventDto(
@@ -28,6 +29,7 @@ public record ManusStepEventDto(
                 event.messageType().map(Enum::name).orElse(null),
                 event.hasPendingToolCalls().orElse(null),
                 event.traceId().orElse(null),
-                event.activeBrainTag().orElse(null));
+                event.activeBrainTag().orElse(null),
+                event.summaryShort().orElse(null));
     }
 }

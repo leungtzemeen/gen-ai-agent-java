@@ -13,7 +13,6 @@ import org.springframework.ai.chat.model.ChatResponse;
 import org.springframework.ai.rag.retrieval.search.VectorStoreDocumentRetriever;
 import org.springframework.ai.vectorstore.filter.Filter;
 import org.springframework.ai.vectorstore.filter.FilterExpressionBuilder;
-import org.springframework.stereotype.Component;
 
 import com.gen.ai.application.manus.api.ManusRunContext;
 import com.gen.ai.application.manus.api.ManusRunRequest;
@@ -41,9 +40,8 @@ import lombok.extern.slf4j.Slf4j;
  *   <li>命中工具预算断路文案或已达 {@code maxSteps} 时同样结束。</li>
  * </ul>
  */
-@Component
-@RequiredArgsConstructor
 @Slf4j
+@RequiredArgsConstructor
 public final class SpringAiManusStepExecutor implements ManusStepExecutor {
 
     private static final String CONTINUATION_USER_PROMPT =
@@ -102,12 +100,12 @@ public final class SpringAiManusStepExecutor implements ManusStepExecutor {
 
         long t0 = System.nanoTime();
         ChatClient.CallResponseSpec callResponse = spec.call();
-        long elapsedMs = Math.max(0L, (System.nanoTime() - t0) / 1_000_000L);
-        Optional<Long> latency = Optional.of(elapsedMs);
-
         // 只走一次 CallResponseSpec：先取 chatResponse；勿在 content() 之后再调 chatResponse()，否则会触发
         // DefaultAroundAdvisorChain「No CallAdvisors available to execute」（链已耗尽）。
         ChatResponse chatResponse = callResponse.chatResponse();
+        long elapsedMs = Math.max(0L, (System.nanoTime() - t0) / 1_000_000L);
+        Optional<Long> latency = Optional.of(elapsedMs);
+
         String text = extractAssistantText(chatResponse);
         String preview = summarizeForUi(text);
         Optional<String> toolHint = extractToolHint(chatResponse);

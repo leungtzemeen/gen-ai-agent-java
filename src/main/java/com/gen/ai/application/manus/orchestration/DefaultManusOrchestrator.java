@@ -108,7 +108,8 @@ public final class DefaultManusOrchestrator implements ManusOrchestrator {
                             ragOn,
                             outcome.stepLatencyMillis(),
                             payloadKind,
-                            outcome.hasPendingToolCalls()));
+                            outcome.hasPendingToolCalls(),
+                            outcome.stepSummaryShort()));
 
             if (outcome.finishedRun()) {
                 ManusTerminationReason reason =

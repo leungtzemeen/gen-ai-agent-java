@@ -70,11 +70,21 @@ public class FileChatMemoryRepository implements ChatMemoryRepository {
         return conversationIds;
     }
     
+    /**
+     * 与 Spring AI {@link org.springframework.ai.chat.memory.InMemoryChatMemoryRepository#saveAll} 语义一致：
+     * {@link org.springframework.ai.chat.memory.MessageWindowChatMemory} 在每次 {@link ChatMemoryRepository#saveAll}
+     * 时传入的是<strong>合并后的完整消息列表</strong>，必须整表覆盖，不可在旧文件内容上 {@code addAll}。
+     * 否则会出现重复片段、或 tool 与 assistant(tool_calls) 错位，触发 OpenAI/DeepSeek「tool 必须紧跟含 tool_calls 的 assistant」类 HTTP 400。
+     */
     @Override
     public void saveAll(@NonNull String conversationId, @NonNull List<Message> messages) {
-        List<Message> conversationMessages = getOrCreateConversation(conversationId);
-        conversationMessages.addAll(messages);
-        saveConversation(conversationId, conversationMessages);
+        List<Message> copy = new ArrayList<>(messages);
+        if (ChatMemoryMessageSanitizer.sanitize(copy)) {
+            log.debug(
+                    ">>>> [ChatMemory-File] chatId={} saveAll 前已裁剪非法 tool/assistant 片段，避免模型 400",
+                    conversationId);
+        }
+        saveConversation(conversationId, copy);
     }
 
     @Override
@@ -82,7 +92,14 @@ public class FileChatMemoryRepository implements ChatMemoryRepository {
     public List<Message> findByConversationId(@NonNull String conversationId) {
         List<Message> allMessages = getOrCreateConversation(conversationId);
         int fromIndex = Math.max(0, allMessages.size() - lastN);
-        return new ArrayList<>(allMessages.subList(fromIndex, allMessages.size()));
+        List<Message> slice = new ArrayList<>(allMessages.subList(fromIndex, allMessages.size()));
+        if (ChatMemoryMessageSanitizer.sanitize(slice)) {
+            log.debug(
+                    ">>>> [ChatMemory-File] chatId={} findByConversationId 子列表已消毒（lastN={}）",
+                    conversationId,
+                    lastN);
+        }
+        return slice;
     }
 
     @Override

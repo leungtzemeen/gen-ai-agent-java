@@ -9,6 +9,8 @@ wiselink:
   manus:
     # noop：首步前不额外调用 LLM；llm：同 ChatModel 无 Memory 短调用，产出 SSE phase=PLAN_SNIPPET
     planner: noop
+    # single-call：一次 ChatClient.call 内层跑满工具（默认）；react：think+act 各一轮，多外层步可观测
+    step-executor: react
 
 spring:
   config:
@@ -121,7 +123,7 @@ app:
     max-messages: 8                           # 历史记忆滑动窗口上限
     last-n-history: 12                        # 磁盘持久化检索深度上限
     max-observation-chars: 8000               # 单次工具返回最大字符上限
-    max-tool-invocations-per-request: 5       # 单请求所有工具真实执行次数之和上限
+    max-tool-invocations-per-request: 10       # 单请求所有工具真实执行次数之和上限
     rag-top-k: 2                              # RAG 知识检索强力限流缩容：仅吐 2 条黄金背景知识
     similarity-threshold: 0.5                 # 【资产收拢】：余弦相似度置信度阈值，低于 0.5 自动过滤
     product-query-max-results: 5              # 商品查询工具最多返回条数

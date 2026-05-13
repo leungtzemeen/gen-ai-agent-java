@@ -20,7 +20,7 @@ public final class LoggingManusStepEventSink implements ManusStepEventSink {
     @Override
     public void onEvent(ManusStepEvent event) {
         log.info(
-                ">>>> [Manus-StepEvent] traceId={} activeBrain={} phase={} stepIndex={} messageType={} ragOn={} latencyMs={} pendingTools={} toolHint={} summary={}",
+                ">>>> [Manus-StepEvent] traceId={} activeBrain={} phase={} stepIndex={} messageType={} ragOn={} latencyMs={} pendingTools={} toolHint={} summaryShort={} summary={}",
                 event.traceId().map(String::valueOf).orElse("-"),
                 event.activeBrainTag().orElse("-"),
                 event.phase(),
@@ -30,6 +30,7 @@ public final class LoggingManusStepEventSink implements ManusStepEventSink {
                 event.latencyMs().map(String::valueOf).orElse("-"),
                 event.hasPendingToolCalls().map(String::valueOf).orElse("-"),
                 event.toolHint().orElse("-"),
+                event.summaryShort().orElse("-"),
                 event.summary());
         delegate.onEvent(event);
     }

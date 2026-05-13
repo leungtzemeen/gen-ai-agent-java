@@ -177,6 +177,7 @@ com.gen.ai.application.manus
 | `latencyMs` | long 或 null | `SpringAiManusStepExecutor` 单次 `ChatClient.call()` 墙钟耗时（毫秒）；仅 `STEP_OUTCOME` 有值。 |
 | `messageType` | string 或 null | `ManusStepMessageType`：`META`、`PLAN_SNIPPET`（Phase B 计划摘要）、`MODEL`、`TOOL`。 |
 | `hasPendingToolCalls` | bool 或 null | 与 Spring AI `ChatResponse#hasToolCalls()` 对齐；`STEP_OUTCOME` 时有值。 |
+| `summaryShort` | string 或 null | Phase D：子步 UI 短摘要；`summary` 仍为全文，旧客户端可忽略本字段。 |
 
 **兼容**：旧前端可继续只读 `phase` / `stepIndex` / `summary`；新字段缺省为 JSON `null`（由 DTO 映射）。`ManusStepExecutor` 自定义实现若未填充 `ManusStepOutcome` 的扩展字段，编排层仍按 `hasPendingToolCalls` 缺省视为「无挂起工具」映射 `messageType`。
 
@@ -207,6 +208,18 @@ com.gen.ai.application.manus
 - `ManusStepEventDto`：`traceId`、`activeBrainTag`（Jackson 可省略 null）；`JsonSseManusStepEventSinkTest` 覆盖带遥测序列化。
 
 **验收**：同一次 run 内所有 sink 事件共享同一 `traceId`（见 `DefaultManusOrchestratorTest`）；SSE JSON 在编排注入后可读到 `traceId`（及有配置时的 `activeBrainTag`）。
+
+---
+
+### Phase D — 双 `ManusStepExecutor`（`single-call` | `react`）✅
+
+**目标**：在**不动**「循环外一次 `resolve`」、双 `ChatClient`、工具预算的前提下，用配置切换 **Spring AI 内层一次跑满工具**（默认）与 **think（关 `internalToolExecution`）+ `ToolCallingManager` act**（鱼皮式多外层步）两种执行器；普通导购路径不受影响。
+
+**开关**：`wiselink.manus.step-executor` = `single-call`（默认）| `react`。
+
+**契约**：`ManusStepOutcome` 增加可选 `stepSummaryShort`；`ManusStepEvent` / `ManusStepEventDto` 增加 `summaryShort`（`STEP_OUTCOME` 专用），`summary` 仍为全文以兼容旧 SSE 消费者。
+
+**实现要点**：`SpringAiManusStepExecutor` 与 `ReactToolCallingManusStepExecutor` 均由 `ManusOrchestrationConfiguration` 注册；`ToolCallingChatOptions#internalToolExecutionEnabled(false)` 仅挂在 react 路径的 `ChatClient` 请求上。
 
 ---
 

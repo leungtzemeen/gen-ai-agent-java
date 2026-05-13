@@ -11,6 +11,7 @@ import org.springframework.http.codec.ServerSentEvent;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.gen.ai.application.manus.api.ManusStepEvent;
+import com.gen.ai.application.manus.api.ManusStepMessageType;
 import com.gen.ai.application.manus.api.ManusTerminationReason;
 
 class JsonSseManusStepEventSinkTest {
@@ -60,5 +61,29 @@ class JsonSseManusStepEventSinkTest {
                 .contains("\"messageType\":\"META\"")
                 .contains("\"traceId\":\"tid-sse\"");
         assertThat(out.get(1).data()).contains("RUN_FINISHED").contains("MODEL_DONE");
+    }
+
+    @Test
+    void stepOutcomeSerializesSummaryShortWhenPresent() throws Exception {
+        ObjectMapper om = new ObjectMapper();
+        List<ServerSentEvent<String>> out = new ArrayList<>();
+        var sink = new JsonSseManusStepEventSink(out::add, om);
+
+        sink.onEvent(
+                ManusStepEvent.stepOutcome(
+                                1,
+                                "很长的完整助手可见文本用于兼容旧客户端",
+                                Optional.of("toolA,toolB"),
+                                true,
+                                Optional.of(42L),
+                                ManusStepMessageType.TOOL,
+                                Optional.of(true),
+                                Optional.of("工具: toolA,toolB"))
+                        .withRunTelemetry("tid-x", Optional.of("deepseek")));
+
+        assertThat(out).hasSize(1);
+        assertThat(out.get(0).data())
+                .contains("\"summaryShort\":\"工具: toolA,toolB\"")
+                .contains("很长的完整助手可见文本");
     }
 }

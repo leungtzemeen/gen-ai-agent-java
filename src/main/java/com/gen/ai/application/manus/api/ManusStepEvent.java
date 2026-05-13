@@ -8,7 +8,7 @@ import java.util.Optional;
  *
  * @param phase                 事件阶段
  * @param stepIndex             从 1 开始；RUN_STARTED / RUN_FINISHED 可为 empty
- * @param summary               人类可读一行摘要（日志、前端气泡）
+ * @param summary               人类可读完整文本（STEP_OUTCOME 时为助手可见全文，兼容旧客户端）
  * @param toolHint              可选：本步关联的工具名（逗号分隔）等，便于排查
  * @param ragOn                 本步是否按策略启用 RAG（STEP_STARTED / STEP_OUTCOME 时有值）
  * @param latencyMs             可选：本步执行耗时毫秒（由 {@link ManusStepExecutor} 填入 STEP_OUTCOME）
@@ -16,6 +16,7 @@ import java.util.Optional;
  * @param hasPendingToolCalls   可选：本步返回后是否仍声明需要工具调用（与 Spring AI {@code ChatResponse#hasToolCalls()} 对齐）
  * @param traceId               Phase C：单次 run 关联 ID，可与 HTTP 请求头对齐（由编排层写入）
  * @param activeBrainTag        Phase C：与 {@link ManusChatRuntime#activeBrainTag()} 一致，便于前端展示当前大脑
+ * @param summaryShort          可选：子步 UI 短摘要；旧客户端可忽略，仅读 {@link #summary()}
  */
 public record ManusStepEvent(
         ManusStepPhase phase,
@@ -27,7 +28,8 @@ public record ManusStepEvent(
         Optional<ManusStepMessageType> messageType,
         Optional<Boolean> hasPendingToolCalls,
         Optional<String> traceId,
-        Optional<String> activeBrainTag) {
+        Optional<String> activeBrainTag,
+        Optional<String> summaryShort) {
 
     /**
      * 由编排层在发出前绑定本次 run 的遥测字段；工厂方法产出的「裸」事件 trace/brain 为空。
@@ -44,7 +46,8 @@ public record ManusStepEvent(
                 messageType,
                 hasPendingToolCalls,
                 Optional.of(traceId),
-                activeBrainTag != null ? activeBrainTag : Optional.empty());
+                activeBrainTag != null ? activeBrainTag : Optional.empty(),
+                summaryShort);
     }
 
     public static ManusStepEvent runStarted(String summary) {
@@ -56,6 +59,7 @@ public record ManusStepEvent(
                 Optional.empty(),
                 Optional.empty(),
                 Optional.of(ManusStepMessageType.META),
+                Optional.empty(),
                 Optional.empty(),
                 Optional.empty(),
                 Optional.empty());
@@ -71,6 +75,7 @@ public record ManusStepEvent(
                 Optional.empty(),
                 Optional.empty(),
                 Optional.of(ManusStepMessageType.PLAN_SNIPPET),
+                Optional.empty(),
                 Optional.empty(),
                 Optional.empty(),
                 Optional.empty());
@@ -92,6 +97,27 @@ public record ManusStepEvent(
                 Optional.of(ManusStepMessageType.META),
                 Optional.empty(),
                 Optional.empty(),
+                Optional.empty(),
+                Optional.empty());
+    }
+
+    /** 兼容旧调用方：无短摘要时 {@code summaryShort} 为空。 */
+    public static ManusStepEvent stepOutcome(
+            int stepIndex,
+            String summary,
+            Optional<String> toolHint,
+            boolean ragOn,
+            Optional<Long> latencyMs,
+            ManusStepMessageType messageType,
+            Optional<Boolean> hasPendingToolCalls) {
+        return stepOutcome(
+                stepIndex,
+                summary,
+                toolHint,
+                ragOn,
+                latencyMs,
+                messageType,
+                hasPendingToolCalls,
                 Optional.empty());
     }
 
@@ -102,7 +128,8 @@ public record ManusStepEvent(
             boolean ragOn,
             Optional<Long> latencyMs,
             ManusStepMessageType messageType,
-            Optional<Boolean> hasPendingToolCalls) {
+            Optional<Boolean> hasPendingToolCalls,
+            Optional<String> summaryShort) {
         return new ManusStepEvent(
                 ManusStepPhase.STEP_OUTCOME,
                 Optional.of(stepIndex),
@@ -113,7 +140,8 @@ public record ManusStepEvent(
                 Optional.of(messageType),
                 hasPendingToolCalls,
                 Optional.empty(),
-                Optional.empty());
+                Optional.empty(),
+                summaryShort != null ? summaryShort : Optional.empty());
     }
 
     public static ManusStepEvent runFinished(String summary, ManusTerminationReason reason) {
@@ -126,6 +154,7 @@ public record ManusStepEvent(
                 Optional.empty(),
                 Optional.empty(),
                 Optional.of(ManusStepMessageType.META),
+                Optional.empty(),
                 Optional.empty(),
                 Optional.empty(),
                 Optional.empty());

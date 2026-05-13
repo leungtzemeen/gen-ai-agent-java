@@ -4,7 +4,9 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
+import org.springframework.ai.chat.memory.ChatMemory;
 import org.springframework.ai.chat.model.ChatModel;
+import org.springframework.ai.model.tool.ToolCallingManager;
 
 import com.gen.ai.application.manus.api.ManusBrainResolver;
 import com.gen.ai.application.manus.api.ManusPlanner;
@@ -17,6 +19,10 @@ import com.gen.ai.application.manus.runtime.LlmManusPlanner;
 import com.gen.ai.application.manus.runtime.LoggingManusStepEventSink;
 import com.gen.ai.application.manus.runtime.NoOpManusPlanner;
 import com.gen.ai.application.manus.runtime.NoOpManusStepEventSink;
+import com.gen.ai.application.manus.runtime.ReactToolCallingManusStepExecutor;
+import com.gen.ai.application.manus.runtime.SpringAiManusStepExecutor;
+import com.gen.ai.infrastructure.mcp.McpClientConfig.ShoppingGuideMergedToolCallbacks;
+import com.gen.ai.prompt.AssistantGuidePromptBundle;
 
 /**
  * Manus 编排 Bean：默认 {@link ManusStepEventSink} 为日志 + 吞事件；HTTP Manus 见
@@ -28,6 +34,50 @@ public class ManusOrchestrationConfiguration {
     @Bean
     ManusStepEventSink manusStepEventSink() {
         return new LoggingManusStepEventSink(NoOpManusStepEventSink.INSTANCE);
+    }
+
+    @Bean
+    ToolCallingManager manusToolCallingManager() {
+        return ToolCallingManager.builder().build();
+    }
+
+    @Bean
+    SpringAiManusStepExecutor springAiManusStepExecutor(
+            AssistantGuidePromptBundle assistantGuidePromptBundle,
+            ShoppingGuideMergedToolCallbacks shoppingGuideMergedToolCallbacks,
+            RagParticipationPolicy ragParticipationPolicy) {
+        return new SpringAiManusStepExecutor(
+                assistantGuidePromptBundle, shoppingGuideMergedToolCallbacks, ragParticipationPolicy);
+    }
+
+    @Bean
+    ReactToolCallingManusStepExecutor reactToolCallingManusStepExecutor(
+            AssistantGuidePromptBundle assistantGuidePromptBundle,
+            ShoppingGuideMergedToolCallbacks shoppingGuideMergedToolCallbacks,
+            RagParticipationPolicy ragParticipationPolicy,
+            ChatMemory chatMemory,
+            ToolCallingManager manusToolCallingManager) {
+        return new ReactToolCallingManusStepExecutor(
+                assistantGuidePromptBundle,
+                shoppingGuideMergedToolCallbacks,
+                ragParticipationPolicy,
+                chatMemory,
+                manusToolCallingManager);
+    }
+
+    /**
+     * {@code single-call}：与 Phase 3 一致，一次 {@code ChatClient.call()} 内层跑满工具（默认）。<br>
+     * {@code react}：每外层步一轮 think（关内层自动 tool）+ 一轮 act（{@link ToolCallingManager}），便于多步可观测。
+     */
+    @Bean
+    ManusStepExecutor manusStepExecutor(
+            @Value("${wiselink.manus.step-executor:single-call}") String mode,
+            SpringAiManusStepExecutor springAiManusStepExecutor,
+            ReactToolCallingManusStepExecutor reactToolCallingManusStepExecutor) {
+        if ("react".equalsIgnoreCase(mode.trim())) {
+            return reactToolCallingManusStepExecutor;
+        }
+        return springAiManusStepExecutor;
     }
 
     @Bean

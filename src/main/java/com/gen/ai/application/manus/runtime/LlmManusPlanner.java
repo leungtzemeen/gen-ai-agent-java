@@ -21,7 +21,7 @@ public final class LlmManusPlanner implements ManusPlanner {
 
     private static final String SYSTEM =
             "你是导购智能体的规划助手。根据用户一句需求，用中文写 2～4 句简短计划：准备如何帮助用户"
-                    + "（可提及是否需要查知识库或调用工具，但不要编造已执行的结果）。"
+                    + "（不要编造已执行的结果）。"
                     + "不要输出 Markdown 标题或列表符号以外的装饰；不要调用任何函数。";
 
     private final ChatModel chatModel;
