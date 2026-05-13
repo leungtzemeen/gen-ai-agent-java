@@ -94,7 +94,7 @@ com.gen.ai.application.manus
 - 包名：`com.gen.ai.application.manus`。
 - 占位：`PlaceholderManusBrainResolver`、`PlaceholderManusChatRuntime`；编排内 **仅一次** `resolve`。
 - 日志：`DefaultManusOrchestrator`、`PlaceholderManusBrainResolver` 使用 `>>>> [Manus-*]` 前缀；可选 `LoggingManusStepEventSink` 装饰下游 Sink。
-- 对外 API：Phase 4 使用 **`GET /ai/chat/manus`** 与短路径 **`GET /ai/manus`**（与普通 `GET /ai/chat` 分接口）。
+- 对外 API：Phase 4 使用 **`GET /ai/chat/manus`**（与普通 `GET /ai/chat` 分接口）；必传 `prompt`、`sessionId`；外层步上限由 **`wiselink.manus.max-steps`** 配置，HTTP 不再传 `category` / `maxSteps`。
 - 单测：`DefaultManusOrchestratorTest`、`FirstStepOnlyRagPolicyTest`。
 
 ---
@@ -140,8 +140,8 @@ com.gen.ai.application.manus
 **交付物**：
 
 - `JsonSseManusStepEventSink` + `ManusChatSseService`：`ManusStepEvent` 序列化为 JSON，经 SSE `event: manus` 下发；编排结束后追加 `event: done`（`ManusDoneEventDto`：finalSummary、termination、executedSteps）。每 HTTP 请求在 `subscribeOn(boundedElastic)` 内自建 `DefaultManusOrchestrator` + Sink，**不**复用全局 `ManusStepEventSink` Bean，避免多用户串事件。
-- `GET /ai/chat/manus` 与短路径 **`GET /ai/manus`**（context-path `/api` 时即 **`/api/ai/chat/manus`** / **`/api/ai/manus`**）等价，`?prompt=...&sessionId=...&category=...&maxSteps=5`（`produces=text/event-stream`），与普通流式 `GET /ai/chat` **分路径**。
-- 敏感词：`SensitiveWordService` 与 `AiShoppingGuideApp#doChatStream` 一致；`prompt` / `sessionId` / `category` 语义与现网导购对齐。
+- `GET /ai/chat/manus`（context-path `/api` 时即 **`/api/ai/chat/manus`**）：必传 `prompt`、`sessionId`；`produces=text/event-stream`；外层步上限由配置 **`wiselink.manus.max-steps`**（默认 5）决定。与普通流式 `GET /ai/chat`（同样必传 `prompt`、`sessionId`）**分路径**。
+- 敏感词：`SensitiveWordService` 与 `AiShoppingGuideApp#doChatStream` 一致；Controller 层不再传 `category`，RAG 不按 `biz_category` HTTP 参数过滤。
 
 **验收**：curl / 浏览器订阅 SSE 可见多条 `Manus` 与一条 `done`；`JsonSseManusStepEventSinkTest` 校验事件名与 JSON 字段。
 
@@ -246,7 +246,7 @@ com.gen.ai.application.manus
 > 下列为原分阶段立项时的确认项；**代码已按 Phase 1～5 交付**，若后续有包名或 API 变更，请同步更新本文与 README。
 
 1. 你确认 **包名** `com.gen.ai.application.manus` 是否 OK（或改为 `com.gen.ai.wiselink.Manus`）。  
-2. Phase 4 对外 API：已采用 **`GET /ai/chat/manus`** 与短路径 **`GET /ai/manus`**（与普通 `GET /ai/chat` 分接口）。  
+2. Phase 4 对外 API：已采用 **`GET /ai/chat/manus`**（与普通 `GET /ai/chat` 分接口）；必传 `prompt`、`sessionId`；`max-steps` 见 `wiselink.manus.max-steps`。  
 3. 回复「从 Phase 1 开始实现」后，再在仓库里落代码（按阶段 PR / commit）。
 
 ---

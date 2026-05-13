@@ -53,7 +53,7 @@ flowchart TB
 
 **Manus 模式**
 
-1. 用户请求 → Controller（`GET /ai/chat/manus` 或 `GET /ai/manus`）→ `ManusChatSseService`  
+1. 用户请求 → Controller（`GET /ai/chat/manus`）→ `ManusChatSseService`  
 2. **编排循环**：`DefaultManusOrchestrator` 中 `step = 1 .. maxSteps`  
 3. 每一轮：经 `ManusStepEventSink` 产生**步骤事件**（SSE `event: manus`，给前端「第几步」）  
 4. 每一轮内部：`SpringAiManusStepExecutor` 一次 **ChatClient** 调用 + 同一套 Advisors / Tools  
@@ -147,6 +147,6 @@ Manus 模式:
 
 **Phase 3 落地**：`SpringAiManusStepExecutor` 对齐导购 system / tools / memory；`FirstStepOnlyRagPolicy` 仅第一步 RAG；整次任务共享 `ManusRunContext#manusTaskToolBudget`（`AtomicInteger`）与 `PerRequestToolBudgetToolCallback` 多步累计一致。详见同一文档 **Phase 3**。
 
-**Phase 4 落地**：`ManusChatSseService` 每请求自建 `DefaultManusOrchestrator` + `JsonSseManusStepEventSink`；`GET /ai/chat/manus` 与 `GET /ai/manus`；SSE `event: manus` 与 `event: done`；敏感词与 `AiShoppingGuideApp#doChatStream` 一致。详见同一文档 **Phase 4**。
+**Phase 4 落地**：`ManusChatSseService` 每请求自建 `DefaultManusOrchestrator` + `JsonSseManusStepEventSink`；`GET /ai/chat/manus`（必传 `prompt`、`sessionId`；`wiselink.manus.max-steps` 控制外层步数）；SSE `event: manus` 与 `event: done`；敏感词与 `AiShoppingGuideApp#doChatStream` 一致。详见同一文档 **Phase 4**。
 
 **Phase 5 落地**：编排与执行器、`LoggingManusStepEventSink` 输出带 `chatId`（会话）、`step`、`ragOn`、`runtimeId` / `identityHashCode` 等可运维字段；README 与本文收入 `docs/` 并互链。详见同一文档 **Phase 5**。

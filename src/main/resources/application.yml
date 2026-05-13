@@ -11,6 +11,8 @@ wiselink:
     planner: noop
     # single-call：一次 ChatClient.call 内层跑满工具（默认）；react：think+act 各一轮，多外层步可观测
     step-executor: react
+    # Manus HTTP 外层步上限（仅服务端配置；GET /ai/chat/manus 不再接受 maxSteps 查询参数）
+    max-steps: 10
 
 spring:
   config:

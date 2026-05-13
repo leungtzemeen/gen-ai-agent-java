@@ -1,5 +1,6 @@
 package com.gen.ai.application.manus.runtime;
 
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.codec.ServerSentEvent;
 import org.springframework.stereotype.Component;
 
@@ -29,6 +30,10 @@ import reactor.core.scheduler.Schedulers;
 @Slf4j
 public final class ManusChatSseService {
 
+    /** 外层步上限，与 {@code wiselink.manus.max-steps} 对齐；非法值在 {@link #stream} 内回退为 5 */
+    @Value("${wiselink.manus.max-steps:5}")
+    private int manusMaxSteps;
+
     private final SensitiveWordService sensitiveWordService;
     private final ManusBrainResolver manusBrainResolver;
     private final ManusStepExecutor manusStepExecutor;
@@ -37,10 +42,10 @@ public final class ManusChatSseService {
     private final ObjectMapper objectMapper;
 
     /**
-     * @param maxSteps 外层步上限，与 {@link ManusRunRequest} 一致，非法或过小则回退为 5
+     * Manus SSE：仅接受用户文案与会话 id；外层步上限取自 {@code wiselink.manus.max-steps}；不按 HTTP 传
+     * {@code biz_category}（RAG 不按类目过滤）。
      */
-    public Flux<ServerSentEvent<String>> stream(
-            String prompt, String sessionId, String category, int maxSteps) {
+    public Flux<ServerSentEvent<String>> stream(String prompt, String sessionId) {
         String cleaned = prompt == null ? "" : prompt.strip();
         if (sensitiveWordService.containsSensitiveWord(cleaned)) {
             log.warn(">>>> [Security] Manus 模式检测到敏感提问，已在本地拦截");
@@ -49,9 +54,12 @@ public final class ManusChatSseService {
         if (cleaned.isBlank()) {
             return Flux.error(new IllegalArgumentException("prompt must not be blank"));
         }
-        String chatId = (sessionId == null || sessionId.isBlank()) ? "default" : sessionId;
-        int steps = maxSteps >= 1 ? maxSteps : 5;
-        ManusRunRequest request = new ManusRunRequest(cleaned, chatId, category, steps);
+        String chatId = sessionId == null ? "" : sessionId.strip();
+        if (chatId.isBlank()) {
+            return Flux.error(new IllegalArgumentException("sessionId must not be blank"));
+        }
+        int steps = manusMaxSteps >= 1 ? manusMaxSteps : 5;
+        ManusRunRequest request = new ManusRunRequest(cleaned, chatId, null, steps);
 
         return Flux.<ServerSentEvent<String>>create(
                         sink -> {
