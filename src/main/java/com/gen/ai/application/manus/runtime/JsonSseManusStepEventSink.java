@@ -1,7 +1,8 @@
 package com.gen.ai.application.manus.runtime;
 
+import java.io.IOException;
+import java.io.UncheckedIOException;
 import java.util.Objects;
-import java.util.function.Consumer;
 
 import org.springframework.http.codec.ServerSentEvent;
 
@@ -17,12 +18,24 @@ import com.gen.ai.application.manus.api.ManusStepEventSink;
  */
 public final class JsonSseManusStepEventSink implements ManusStepEventSink {
 
-    private final Consumer<ServerSentEvent<String>> downstream;
+    private final ManusSseManusJsonConsumer jsonConsumer;
     private final ObjectMapper objectMapper;
 
-    public JsonSseManusStepEventSink(Consumer<ServerSentEvent<String>> downstream, ObjectMapper objectMapper) {
-        this.downstream = Objects.requireNonNull(downstream);
+    public JsonSseManusStepEventSink(ManusSseManusJsonConsumer jsonConsumer, ObjectMapper objectMapper) {
+        this.jsonConsumer = Objects.requireNonNull(jsonConsumer);
         this.objectMapper = Objects.requireNonNull(objectMapper);
+    }
+
+    /**
+     * 测试或适配 {@link ServerSentEvent} 流时，将每帧 JSON 包进 {@code event: manus} 语义等价的结构。
+     */
+    public static JsonSseManusStepEventSink forServerSentEventTest(
+            java.util.function.Consumer<ServerSentEvent<String>> downstream, ObjectMapper objectMapper) {
+        return new JsonSseManusStepEventSink(
+                json ->
+                        downstream.accept(
+                                ServerSentEvent.<String>builder().event("manus").data(json).build()),
+                objectMapper);
     }
 
     @Override
@@ -30,9 +43,11 @@ public final class JsonSseManusStepEventSink implements ManusStepEventSink {
         try {
             ManusStepEventDto dto = ManusStepEventDto.from(event);
             String json = objectMapper.writeValueAsString(dto);
-            downstream.accept(ServerSentEvent.<String>builder().event("manus").data(json).build());
+            jsonConsumer.accept(json);
         } catch (JsonProcessingException e) {
             throw new IllegalStateException("Manus SSE: failed to serialize ManusStepEvent", e);
+        } catch (IOException e) {
+            throw new UncheckedIOException(e);
         }
     }
 }

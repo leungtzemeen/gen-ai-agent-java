@@ -20,7 +20,7 @@ class JsonSseManusStepEventSinkTest {
     void emitsPlanSnippetJson() throws Exception {
         ObjectMapper om = new ObjectMapper();
         List<ServerSentEvent<String>> out = new ArrayList<>();
-        var sink = new JsonSseManusStepEventSink(out::add, om);
+        var sink = JsonSseManusStepEventSink.forServerSentEventTest(out::add, om);
 
         sink.onEvent(
                 ManusStepEvent.planSnippet("将先检索知识库再组织回答")
@@ -43,7 +43,7 @@ class JsonSseManusStepEventSinkTest {
     void emitsNamedEventWithJsonPayload() throws Exception {
         ObjectMapper om = new ObjectMapper();
         List<ServerSentEvent<String>> out = new ArrayList<>();
-        var sink = new JsonSseManusStepEventSink(out::add, om);
+        var sink = JsonSseManusStepEventSink.forServerSentEventTest(out::add, om);
 
         sink.onEvent(
                 ManusStepEvent.stepStarted(1, "hello", true)
@@ -67,7 +67,7 @@ class JsonSseManusStepEventSinkTest {
     void stepOutcomeSerializesSummaryShortWhenPresent() throws Exception {
         ObjectMapper om = new ObjectMapper();
         List<ServerSentEvent<String>> out = new ArrayList<>();
-        var sink = new JsonSseManusStepEventSink(out::add, om);
+        var sink = JsonSseManusStepEventSink.forServerSentEventTest(out::add, om);
 
         sink.onEvent(
                 ManusStepEvent.stepOutcome(

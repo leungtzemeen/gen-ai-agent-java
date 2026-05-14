@@ -139,7 +139,7 @@ com.gen.ai.application.manus
 
 **交付物**：
 
-- `JsonSseManusStepEventSink` + `ManusChatSseService`：`ManusStepEvent` 序列化为 JSON，经 SSE `event: manus` 下发；编排结束后追加 `event: done`（`ManusDoneEventDto`：finalSummary、termination、executedSteps）。每 HTTP 请求在 `subscribeOn(boundedElastic)` 内自建 `DefaultManusOrchestrator` + Sink，**不**复用全局 `ManusStepEventSink` Bean，避免多用户串事件。
+- `JsonSseManusStepEventSink` + `ManusChatSseService`：`ManusStepEvent` 序列化为 JSON，经 SSE `event: manus` 下发；编排结束后追加 `event: done`（`ManusDoneEventDto`：finalSummary、termination、executedSteps）。每 HTTP 请求在 `Schedulers.boundedElastic().schedule(...)` 内跑编排，经 **`SseEmitter#send`** 逐帧写出，自建 `DefaultManusOrchestrator` + Sink，**不**复用全局 `ManusStepEventSink` Bean，避免多用户串事件。
 - `GET /ai/chat/manus`（context-path `/api` 时即 **`/api/ai/chat/manus`**）：必传 `prompt`、`sessionId`；`produces=text/event-stream`；外层步上限由配置 **`wiselink.manus.max-steps`**（默认 5）决定。与普通流式 `GET /ai/chat`（同样必传 `prompt`、`sessionId`）**分路径**。
 - 敏感词：`SensitiveWordService` 与 `AiShoppingGuideApp#doChatStream` 一致；Controller 层不再传 `category`，RAG 不按 `biz_category` HTTP 参数过滤。
 

@@ -24,7 +24,7 @@ flowchart TB
   end
 
   subgraph Manus[Manus 模式（显式多步 + 每步可观测）]
-    API --> MC[ManusChatSseService<br/>SSE / boundedElastic]
+    API --> MC[ManusChatSseService<br/>SseEmitter + boundedElastic]
     MC --> ORCH[DefaultManusOrchestrator<br/>for step 1..maxSteps]
     ORCH --> STEP[Step k：事件 Sink → SSE Manus]
     STEP --> CALL[SpringAiManusStepExecutor<br/>本步 ChatClient.call]

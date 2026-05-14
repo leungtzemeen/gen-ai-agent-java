@@ -1,11 +1,11 @@
 package com.gen.ai.web;
 
 import org.springframework.http.MediaType;
-import org.springframework.http.codec.ServerSentEvent;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
 import java.util.Optional;
 
@@ -39,11 +39,11 @@ public class AiShoppingGuideController {
             description =
                     "路径 {@code /ai/chat/manus}；SSE：event: manus 为 ManusStepEvent JSON；event: done 为整次任务收尾。"
                             + "必传：{@code prompt}、{@code sessionId}。外层步上限由配置 {@code wiselink.manus.max-steps} 决定，不按类目过滤 RAG。")
-    public Flux<ServerSentEvent<String>> chatManus(
-            @RequestParam("prompt") String prompt, @RequestParam("sessionId") String sessionId) {
-        return blankPromptOrSessionError(prompt, sessionId)
-                .<Flux<ServerSentEvent<String>>>map(msg -> Flux.error(new IllegalArgumentException(msg)))
-                .orElseGet(() -> manusChatSseService.stream(prompt, sessionId));
+    public SseEmitter chatManus(@RequestParam("prompt") String prompt, @RequestParam("sessionId") String sessionId) {
+        blankPromptOrSessionError(prompt, sessionId).ifPresent(msg -> {
+            throw new IllegalArgumentException(msg);
+        });
+        return manusChatSseService.streamSseEmitter(prompt, sessionId);
     }
 
     @GetMapping(value = "/chat", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
@@ -59,10 +59,10 @@ public class AiShoppingGuideController {
     }
 
     /**
-     * 与 {@link com.gen.ai.application.manus.runtime.ManusChatSseService#stream} 内校验对齐：空白 prompt / sessionId
+     * 与 {@link com.gen.ai.application.manus.runtime.ManusChatSseService#streamSseEmitter} 内校验对齐：空白 prompt / sessionId
      * 在 Controller 即失败，避免无意义进入 Manus 或导购流。
      *
-     * @return 若有误则携带错误文案（用于 {@link Flux#error(Throwable)}）；合法则 empty
+     * @return 若有误则携带错误文案（Controller 抛出 {@link IllegalArgumentException}）；合法则 empty
      */
     private static Optional<String> blankPromptOrSessionError(String prompt, String sessionId) {
         if (prompt == null || prompt.isBlank()) {
