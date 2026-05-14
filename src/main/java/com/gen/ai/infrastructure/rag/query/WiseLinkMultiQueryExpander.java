@@ -3,6 +3,7 @@ package com.gen.ai.infrastructure.rag.query;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.TimeUnit;
 
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.rag.Query;
@@ -43,15 +44,24 @@ public final class WiseLinkMultiQueryExpander implements QueryExpander {
         if (!StringUtils.hasText(q)) {
             return List.of("");
         }
+        long expandStartNanos = System.nanoTime();
         try {
-             // 支持动态渲染 {} 变量
+            // 支持动态渲染 {} 变量
             String systemPrompt = registry.get(PromptDefinition.MULTI_QUERY_EXPANDER)
                     .render(Map.of("query", q));
+            log.info(
+                    ">>>> [RAG][WiseLink-分身] 改写模型调用开始, queryLength={}",
+                    q.length());
             String raw = chatClient.prompt()
                     .system(systemPrompt)
                     .user("用户问题：\n" + q)
                     .call()
                     .content();
+            long elapsedMs = TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - expandStartNanos);
+            log.info(
+                    ">>>> [RAG][WiseLink-分身] 改写模型调用结束, elapsedMs={}, rawLength={}",
+                    elapsedMs,
+                    raw == null ? 0 : raw.length());
             List<String> lines = normalizeExpandedLines(raw);
             while (lines.size() < 3) {
                 lines.add(q);
@@ -65,7 +75,11 @@ public final class WiseLinkMultiQueryExpander implements QueryExpander {
             // 【核心重塑】：我们让百炼继续生成 3 条（防格式乱），但后端只接住第 1 条发给向量库！
             return List.of(three.get(0));
         } catch (Exception e) {
-            log.warn(">>>> [RAG][WiseLink-分身] 查询改写失败，回退为原始查询。原因：{}", e.toString());
+            long elapsedMs = TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - expandStartNanos);
+            log.warn(
+                    ">>>> [RAG][WiseLink-分身] 查询改写失败，回退为原始查询。elapsedMs={}, 原因：{}",
+                    elapsedMs,
+                    e.toString());
             return List.of(q);
         }
     }
