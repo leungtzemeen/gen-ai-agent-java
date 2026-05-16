@@ -88,9 +88,12 @@ spring:
                 - "-jar"
                 # 自行修改成wiselink-mcp-ecosystem-0.1.0-SNAPSHOT.jar所在的路径
                 - "${WISELINK_MCP_WORKSPACE_ROOT}/target/wiselink-mcp-ecosystem-0.1.0-SNAPSHOT.jar"
-              env:
-                # 子进程工作区根；ecosystem 日志为 {根}/logs/ecosystem.log。未设 OS 环境变量时与 app.storage.root 一致
-                WISELINK_MCP_WORKSPACE_ROOT: ${WISELINK_MCP_WORKSPACE_ROOT:${app.storage.root}}
+                # 【核心业务配置】显式指定子进程的 application.yml 路径
+                # 必须外置指定，否则子进程会走向 Jar 包内默认配置，导致端口冲突或初始化失败
+                - "--spring.config.location=file:${WISELINK_MCP_WORKSPACE_ROOT}/target/config/application.yml"
+                # 通过加载特定的 logback 配置，强制让子进程日志流向 System.err（错误流）
+                # 从而彻底抽离 System.out（标准输出），防止 Spring 启动日志和业务日志污染 MCP 协议的 JSON 管道
+                - "--logging.config=file:${WISELINK_MCP_WORKSPACE_ROOT}/target/config/logback-spring.xml"
 
 # springdoc-openapi项目配置
 springdoc:
