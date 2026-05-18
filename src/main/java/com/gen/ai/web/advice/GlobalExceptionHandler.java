@@ -1,5 +1,8 @@
 package com.gen.ai.web.advice;
 
+import java.io.IOException;
+import java.util.Locale;
+
 import org.springframework.ai.retry.TransientAiException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -59,6 +62,20 @@ public class GlobalExceptionHandler {
         return ResponseEntity.ok(FRIENDLY_REFUSAL);
     }
 
+    /**
+     * 流式/SSE 场景下前端 AbortController 断连时，Tomcat 常抛出 {@link IOException}（如 Connection reset）。
+     * 对可识别的客户端主动断流做消噪；其余 IO 异常仍按 error 记录并返回 500。
+     */
+    @ExceptionHandler(IOException.class)
+    public ResponseEntity<Void> handleIOException(IOException ex) {
+        if (isClientInitiatedStreamDisconnect(ex)) {
+            logClientStreamDisconnect();
+            return ResponseEntity.ok().build();
+        }
+        log.error(">>>> [WiseLink-Guard] IO 异常", ex);
+        return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
+    }
+
     @ExceptionHandler(RuntimeException.class)
     public ResponseEntity<String> handleRuntimeException(RuntimeException ex) {
         if (isDashScopeSensitiveInspectionFailed(ex)) {
@@ -66,8 +83,42 @@ public class GlobalExceptionHandler {
             return ResponseEntity.ok(FRIENDLY_REFUSAL);
         }
 
+        if (isClientInitiatedStreamDisconnect(ex)) {
+            logClientStreamDisconnect();
+            return ResponseEntity.ok().build();
+        }
+
         log.error(">>>> [WiseLink-Guard] 未处理的运行时异常", ex);
         return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body("Internal Server Error");
+    }
+
+    private static void logClientStreamDisconnect() {
+        log.info(">>>> [WiseLink-Guard] 客户端主动断开了流式连接，后端流传输平滑安全终止。");
+    }
+
+    /**
+     * 识别客户端主动断流：遍历异常链中的 {@link IOException}，匹配常见断连文案或 Tomcat ClientAbortException。
+     */
+    private static boolean isClientInitiatedStreamDisconnect(Throwable ex) {
+        for (Throwable t = ex; t != null; t = t.getCause()) {
+            if (t instanceof IOException io && matchesClientDisconnectSignal(io)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private static boolean matchesClientDisconnectSignal(IOException ex) {
+        String simple = ex.getClass().getSimpleName();
+        if ("ClientAbortException".equals(simple)) {
+            return true;
+        }
+        String msg = safeMessage(ex).toLowerCase(Locale.ROOT);
+        return msg.contains("中止")
+                || msg.contains("broken pipe")
+                || msg.contains("connection reset")
+                || msg.contains("connection aborted")
+                || msg.contains("reset by peer");
     }
 
     private static boolean isDashScopeSensitiveInspectionFailed(RuntimeException ex) {
