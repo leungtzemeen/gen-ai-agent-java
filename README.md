@@ -4,7 +4,17 @@
 
 WiseLink AI 是一款面向电商场景的 **导购 Agent**：以 **Spring Boot 3.4** 为运行时底座，以 **Spring AI Modular RAG** 为检索增强内核，将「有据可依的零幻觉约束」与「高情商、场景化的导购表达」压进同一条推理链路。我们不追求话术堆砌，追求 **可观测、可隔离、可演进** 的工程化交付。
 
-> **维护状态（2026）**：本仓库 **后端阶段性交付已收敛**，当前以文档与配置为准做 **非活跃维护**（缺陷与安全补丁视需要处理）。后续产品演进可能在其他仓库继续；克隆运行请以 **`application.yml`** + 本文「快速开始 / 配置说明」为准。
+> **项目状态（2026）**：核心导购 / RAG / Manus / MCP 工具链 **已可完整演示**；日常以文档与 **`target/config` 外置配置** 为准维护。克隆运行见下文「快速开始 / 生产部署」。
+
+---
+
+## 核心能力清单
+
+- **WiseLink AI（智选灵犀）**：Java 21 + Spring Boot 3.4 + Spring AI 1.1 的 **电商导购 Agent**，Modular RAG（查询重写 → 分身扩展 → 向量检索 → 上下文注入）+ Function Calling + MCP 外部工具。
+- **多模型拨码**：`wiselink.active-brain` 切换 DashScope / DeepSeek / Ollama；Manus 多步编排 **循环外冻结 ChatClient**，避免步间误换模型。
+- **Manus 多步 Agent**：`DefaultManusOrchestrator` + 默认 **`react`** 执行器（think + act）；HTTP **`SseEmitter`** 推送 `event: manus` / `done` 步事件，可观测 `traceId`、工具预算跨步累计。
+- **工程化**：敏感词 DFA、单请求工具预算、Kryo 会话落盘、知识库指纹短路（见 `docs/rag-sidecar.md` 说明）、jar 与 **`application.yml` / `logback` 分离打包**。
+- **MCP**：Stdio 挂载 **高德地图 MCP** + 自研 **wiselink-mcp-ecosystem** 子进程；子进程通过外置 `spring.config.location` / `logging.config` 避免与主应用端口、stdio 协议冲突。
 
 ---
 
@@ -26,7 +36,7 @@ RAG 不走手工拼接 Prompt 的野路子，而是 **`RetrievalAugmentationAdvi
 |------|------------------|---------------------|
 | **Query Transformer** | **`RewriteQueryTransformer`** | 将多轮对话 **重写为可检索的 standalone 查询**；模板强制 **商品主体落地**，专治「它/这个/那款」导致的 **检索漂移**（代词失忆）。无历史时短路，省一次 LLM。 |
 | **架构实现** | *Implementation note* | 文档层统一称 **RewriteQueryTransformer**；工程实现上由 Spring AI **`CompressionQueryTransformer`**（对话压缩机制） + **`ShortCircuitCompressionQueryTransformer`**（`com.gen.ai.infrastructure.rag.query`）承载，WiseLink 自定义 Prompt 完成「检索侧语义重写」。 |
-| **Query Expander** | **`MultiQueryExpander`（分身检索）** | **`WiseLinkMultiQueryExpander`**（包：`com.gen.ai.infrastructure.rag.query`，`QueryExpander`，语义对齐 **`MultiQueryExpander`**）：一路改三路，并行召回 + join 去重；解析规则针对中文导购加固。 |
+| **Query Expander** | **`MultiQueryExpander`（分身检索）** | **`WiseLinkMultiQueryExpander`**：LLM 产出最多 3 条中文检索变体（格式解析加固），**当前实现仅取第 1 条做向量检索**（降本、控延迟）；保留多行生成是为防模型格式抖动。改写调用带 **开始/结束 + elapsedMs** 日志便于排障。 |
 | **Retriever** | **`VectorStoreDocumentRetriever`** | TopK + **similarity threshold** + **Metadata Filter** 精准收敛。 |
 | **Augmenter** | **`ContextualQueryAugmenter`** | `assistant-guide.st` 内嵌模板注入上下文，强调 **有据可依**、禁止无片段支撑的断言。 |
 
@@ -46,15 +56,18 @@ RAG 不走手工拼接 Prompt 的野路子，而是 **`RetrievalAugmentationAdvi
 
 | 路径（均相对于 `server.servlet.context-path`，默认 **`/api`**） | 说明 |
 |--------|------|
-| **`GET /ai/chat`** | 流式导购；**必传** `prompt`、`sessionId`。 |
-| **`GET /ai/chat/manus`** | Manus SSE（`event: manus` / `done`）；**必传** `prompt`、`sessionId`；外层步数由 **`wiselink.manus.max-steps`** 配置；**`wiselink.manus.step-executor`**=`single-call` \| `react`。 |
+| **`GET /ai/chat`** | 流式导购（**`Flux<String>`** SSE）；**必传** `prompt`、`sessionId`。 |
+| **`GET /ai/chat/manus`** | Manus 多步 SSE（**`SseEmitter`**，`event: manus` / `done`，步事件逐帧写出）；**必传** `prompt`、`sessionId`；默认 **`step-executor: react`**；外层步数 **`wiselink.manus.max-steps`**（默认 10）。生产经 Nginx 反代时应对该路径 **关闭 `proxy_buffering`**。 |
 | **`POST /ai/admin/import`**、**`DELETE /ai/admin/clear`** | 知识库运维，见 **`SystemController`**；由 **`LocalhostOnlyAdminInterceptor`** 限制为 **本机 loopback** 可调，便于本机 `curl`。 |
 | **CORS** | **`WebMvcAppConfiguration`** 对 `/**` 注册宽松跨域（`allowedOriginPatterns("*")` 等），减轻前后端分离时的浏览器预检问题。 |
 
-### 实时工具联动（Function Calling）
+### 实时工具联动（Function Calling + MCP）
 
-- 注册 **`searchProductsFunction`** 等函数 Bean：按关键词 / 价格区间查询本地商品目录 JSON，返回结构化列表（不含时间戳字段），便于向用户展示；另可通过 **Spring AI MCP Client（Stdio）** 挂载地图等外部工具（见 `application.yml` 中 `spring.ai.mcp.client`）。
-- 人设模板约束：**可核对的商品字段（如价格文案、规格列表）须以工具返回为准**，禁止凭记忆「脑补目录或价格」——把 **零幻觉** 从口号做成 **协议**。
+- **应用内工具**：**`searchProductsFunction`** 等，按关键词 / 价格区间查本地商品 JSON，结构化返回。
+- **MCP（Stdio）**（`spring.ai.mcp.client`，见 `application.yml`）：
+  - **`map-server`**：**`@amap/amap-maps-mcp-server`**（需 **`AMAP_MAP_KEY`** 环境变量）。
+  - **`wiselink-mcp-ecosystem`**：独立 Spring Boot jar，由主应用拉起；须配置 **`WISELINK_MCP_WORKSPACE_ROOT`**，并通过 **`--spring.config.location`** / **`--logging.config`** 指向 **`target/config/`** 下外置 yml 与 logback（避免子进程误读 jar 内默认配置、且日志走 stderr 不污染 MCP stdio）。
+- 人设模板约束：**可核对的商品字段须以工具返回为准**，禁止凭记忆脑补目录或价格。
 
 ---
 
@@ -63,14 +76,14 @@ RAG 不走手工拼接 Prompt 的野路子，而是 **`RetrievalAugmentationAdvi
 | 类别 | 技术 |
 |------|------|
 | 运行时 | Java **21**、Spring Boot **3.4.x** |
-| Web | **spring-boot-starter-web**（`DispatcherServlet`、`HandlerInterceptor`、全局 CORS）；部分接口返回 **Reactor `Flux`**（SSE），与 **spring-boot-starter-webflux** 共存于同一应用 |
+| Web | **spring-boot-starter-web**（CORS、拦截器）；**`/ai/chat`** 为 **Reactor `Flux`** 流式 SSE；**`/ai/chat/manus`** 为 **`SseEmitter`** 命名事件 SSE；与 **webflux** 依赖共存 |
 | AI 编排 | **Spring AI**（`ChatClient`、`RetrievalAugmentationAdvisor`、`VectorStoreDocumentRetriever`、**RewriteQueryTransformer**（实现：`CompressionQueryTransformer`）、`MultiQueryExpander`（实现：`WiseLinkMultiQueryExpander`）、`ContextualQueryAugmenter`） |
 | 模型接入 | **Spring AI Alibaba · DashScope**；**Spring AI OpenAI 兼容客户端**（如 **DeepSeek** `api.deepseek.com`）；**Ollama**（本地）；由 **`wiselink.active-brain`** 切换 |
 | 工具与协议 | **Spring AI MCP Client**（Stdio 连接外部 MCP）；应用内 **Function Calling** / `ToolCallback` |
 | 向量与文档 | **Spring AI VectorStore**、`spring-ai-markdown-document-reader`、`spring-ai-advisors-vector-store` |
 | 工具库 | **Hutool**（DFA 等） |
 | 会话持久 | **Kryo**（`FileChatMemoryRepository` + **`MessageWindowChatMemory`**，路径见 `app.storage`） |
-| Manus | **`DefaultManusOrchestrator`**、`ManusChatSseService`；执行器 **`SpringAiManusStepExecutor`** / **`ReactToolCallingManusStepExecutor`**（`wiselink.manus.step-executor`） |
+| Manus | **`DefaultManusOrchestrator`**、`ManusChatSseService`（**`SseEmitter`**）；默认 **`ReactToolCallingManusStepExecutor`**（`wiselink.manus.step-executor: react`） |
 | API 文档 | **springdoc-openapi**、**Knife4j** |
 
 ---
@@ -105,7 +118,7 @@ flowchart LR
 
 ### 一句话心智模型
 
-**RewriteQueryTransformer** 把「聊散的」变成「能搜的」→ **MultiQueryExpander** 把「能搜的」变成「多视角搜」→ **Retriever** 从向量库捞出证据 → **ContextualQueryAugmenter** 把证据钉进 User 侧提示 → **LLM + Tools** 在约束下完成高情商导购。
+**RewriteQueryTransformer** 把「聊散的」变成「能搜的」→ **MultiQueryExpander** 生成检索变体（当前取首条检索）→ **Retriever** 从向量库捞出证据 → **ContextualQueryAugmenter** 把证据钉进 User 侧提示 → **LLM + Tools** 在约束下完成高情商导购。
 
 ### 包结构约定（Java）
 
@@ -114,7 +127,7 @@ flowchart LR
 | 包路径 | 放什么 |
 |--------|--------|
 | **`com.gen.ai.infrastructure.rag.query`** | Modular RAG **查询链**上的组件（如 **`WiseLinkMultiQueryExpander`**、**`ShortCircuitCompressionQueryTransformer`**），与 Spring AI `QueryExpander` / `QueryTransformer` 对齐。 |
-| **`com.gen.ai.infrastructure.rag.*`**（`service`、`pipeline`、`context`、`extractor`、`ingestion`、`model`、`bootstrap`、`revision` 等） | 向量 **灌库 / 索引 / 指纹侧车 / 文档提取** 等与「数据面」相关的实现。 |
+| **`com.gen.ai.infrastructure.rag.*`**（`service`、`pipeline`、`context`、`extractor`、`ingestion`、`model`、`bootstrap`、`revision` 等） | 向量 **灌库 / 索引 / 指纹侧车 / 文档提取** 等；源指纹短路与判重侧车说明见 **`docs/rag-sidecar.md`**（本地文档，可能未入库）。 |
 | **`com.gen.ai.infrastructure.agent.toolcallback`** | **框架向** 的 `ToolCallback` 装饰：单次请求调用预算、观测截断、`ToolCallback` 组合顺序等；**不要**与业务工具包混淆。 |
 | **`com.gen.ai.wiselink.tools`** | WiseLink **业务工具**（如商品查询等），面向领域能力命名。 |
 | **`com.gen.ai.infrastructure.security`** | 应用级 **敏感词 / 合规**（如 `SensitiveWordService`）。 |
@@ -129,7 +142,7 @@ flowchart LR
   即在进入 `while` / `for` 多步循环之前，根据用户选择（或会话策略）**固定**解析出本次任务要用的那条模型链路；循环内每一步 **禁止** 再无参 `ChatClient.builder().build()` 或仅依赖 `@Primary` `ChatModel` 重新取默认实现。
 - **延伸检查**：RAG / Advisor 等若会**单独**发起 LLM 调用，须确认其使用的也是**同一条**模型配置，否则会表现为「某一步悄悄换了大脑」。
 - **流程与 RAG 策略的图示说明**：见 [`docs/MANUS-ARCHITECTURE.md`](./docs/MANUS-ARCHITECTURE.md)。
-- **分阶段实现设计（接口、包结构、Phase 1～5、扩展点）**：见 [`docs/MANUS-DESIGN-PHASES.md`](./docs/MANUS-DESIGN-PHASES.md)。**Phase 1～3** 已在 `com.gen.ai.application.manus` 落地。**Phase 4 HTTP**：`GET /ai/chat/manus`（配合 `server.servlet.context-path: /api` 时为 **`/api/ai/chat/manus`**）必传 `prompt`、`sessionId`；外层步上限由 **`wiselink.manus.max-steps`**（以仓库内 `application.yml` 为准）配置，不再接受 `maxSteps`/`category` 查询参数；`text/event-stream`。普通流式 `GET /ai/chat` 同样必传 `prompt`、`sessionId`。SSE 事件名 `manus`（步事件 JSON，含 Phase A 可观测字段与 **Phase C** `traceId` / `activeBrainTag`；可选 **Phase B** `PLAN_SNIPPET`，由 `wiselink.manus.planner`=`noop`|`llm` 控制；**Phase D** 执行器 `wiselink.manus.step-executor`=`single-call`|`react`（`react` 为 think+act 多外层步）与 `done`（收尾）；敏感词与现网流式导购一致。**Phase 5**（观测、工具预算累计、文档与交叉引用）：见同一文档 Phase 5；运维可 grep 前缀 `>>>> [Manus-`。
+- **分阶段实现设计（接口、包结构、Phase 1～5、扩展点）**：见 [`docs/MANUS-DESIGN-PHASES.md`](./docs/MANUS-DESIGN-PHASES.md)、[`docs/MANUS-ARCHITECTURE.md`](./docs/MANUS-ARCHITECTURE.md)。**Phase 4 HTTP**：`GET /ai/chat/manus` 返回 **`SseEmitter`**，在 `boundedElastic` 中跑编排，经 **`send`** 推送 `event: manus`（步事件 JSON，`traceId` / `activeBrainTag` 等）与 `event: done`；默认 **`step-executor: react`**。普通流式仍为 **`GET /ai/chat`**（`Flux`）。**Phase 5**：结构化日志，grep 前缀 `>>>> [Manus-`。
 
 ---
 
@@ -144,7 +157,8 @@ flowchart LR
   - **`deepseek`**（仓库默认配置常见）：设置 **`AI_DEEPSEEK_API_KEY`**，绑定 `spring.ai.openai.api-key`（`base-url` 指向 DeepSeek 兼容端点）。  
   - **`ollama`**：一般无需云端 Key；需本机已启动 Ollama 且模型与 `application.yml` 一致。  
   未设置当前大脑所依赖的占位符时 Spring 会 **启动失败（fail-fast）**；密钥请勿写入仓库或 YAML，详见 §6。
-- 可写本地目录：默认 **`./data/gen-ai-agent`**（向量索引、知识库 Markdown、会话历史等，见 `application.yml`）
+- **MCP（可选）**：**`WISELINK_MCP_WORKSPACE_ROOT`**、**`AMAP_MAP_KEY`**；不联调外部工具时可设 `spring.ai.mcp.client.enabled: false`。
+- 可写本地目录：默认 **`./data`**（向量索引、知识库、会话历史等，见 `app.storage`）
 
 ### 依赖安装
 
@@ -177,6 +191,29 @@ mvn spring-boot:run
 默认 **`http://localhost:8081/api`**（`context-path: /api`）。  
 Swagger / Knife4j：**`/api/swagger-ui.html`**（具体路径以 `springdoc` 配置为准）。
 
+### 生产部署（jar 与配置分离）
+
+`mvn package` 后：
+
+| 产物 | 说明 |
+|------|------|
+| **`target/gen-ai-agent-*.jar`** | 运行包；**不含** `application.yml`、`logback-spring.xml`（由 `maven-jar-plugin` 排除）。 |
+| **`target/config/`** | 外置 **`application*.yml`**、**`logback*.xml`**，部署时与 jar 同目录或按运维规范挂载。 |
+
+启动示例（在含 `config/` 的目录下，或显式指定配置路径）：
+
+```bash
+export AI_DEEPSEEK_API_KEY="your-key"
+# 若启用 MCP ecosystem / 高德，另设：
+# export WISELINK_MCP_WORKSPACE_ROOT="/path/to/wiselink-mcp-ecosystem-repo"
+# export AMAP_MAP_KEY="your-amap-key"
+
+java -jar gen-ai-agent-0.0.1-SNAPSHOT.jar \
+  --spring.config.additional-location=file:./config/application.yml
+```
+
+联调 **wiselink-mcp-ecosystem** 时，请先在该仓库执行 `mvn package`，保证 **`${WISELINK_MCP_WORKSPACE_ROOT}/target/config/`** 与 jar 路径与主应用 `application.yml` 中 `stdio.connections.wiselink-mcp-ecosystem.args` 一致。
+
 ### 可选：敏感词库
 
 将词表以 UTF-8 文本 **Base64 编码** 写入 **`src/main/resources/sensitive_words.bin`**（每行一词，`#` 行为注释），启动时由 `SensitiveWordService` 载入。
@@ -195,6 +232,15 @@ Swagger / Knife4j：**`/api/swagger-ui.html`**（具体路径以 `springdoc` 配
 
 1. **推荐方式**：通过环境变量 **`AI_DEEPSEEK_API_KEY`** 注入（与主配置 `spring.ai.openai.api-key: ${AI_DEEPSEEK_API_KEY}` 对应）。
 2. **`base-url` / `model`**：见 `application.yml` 中 `spring.ai.openai`；勿在仓库中提交明文 Key。
+
+### MCP 与地图（启用 `spring.ai.mcp.client` 时）
+
+| 变量 | 用途 |
+|------|------|
+| **`WISELINK_MCP_WORKSPACE_ROOT`** | **wiselink-mcp-ecosystem** 工程根目录；主应用 Stdio 拉起子 jar 及 **`target/config/application.yml`**、**`logback-spring.xml`**。 |
+| **`AMAP_MAP_KEY`** | 高德 MCP（`map-server`）所需，映射为子进程环境变量 `AMAP_MAPS_API_KEY`。 |
+
+未配置时：主应用仍可启动（可将 `spring.ai.mcp.client.enabled` 设为 `false`）；地图 / ecosystem 工具不可用。
 
 ### 通用
 
@@ -218,4 +264,4 @@ Swagger / Knife4j：**`/api/swagger-ui.html`**（具体路径以 `springdoc` 配
 
 ---
 
-*WiseLink —— 让每一次推荐，都有回路可查。* **仓库维护节奏见文首「维护状态」。**
+*WiseLink —— 让每一次推荐，都有回路可查。*
