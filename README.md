@@ -8,6 +8,27 @@ WiseLink AI 是一款面向电商场景的 **导购 Agent**：以 **Spring Boot 
 
 ---
 
+## WiseLink 生态仓库（三仓分工）
+
+WiseLink 按职责拆为 **三个独立 GitHub 仓库**，本仓库为 **主应用（Java 导购 Agent）**；联调时请分别克隆并对齐端口 / 环境变量。
+
+| 仓库 | 说明 | 默认端口 / 协议 |
+|------|------|-----------------|
+| **本仓库**（`gen-ai-agent-java`） | 导购与 Manus 编排、Modular RAG、敏感词、应用内工具、**MCP Client（Stdio 拉起子进程）**；HTTP API 前缀 `/api` | **8081** |
+| [**wiselink-console-ui**](https://github.com/leungtzemeen/wiselink-console-ui) | **对话控制台前端**：Vue 3 + Vite + TypeScript；对接本仓库 **`GET /ai/chat`**（流式）与 **`GET /ai/chat/manus`**（`event: manus` / `done`）；自研 SSE 解析、`AbortController` 断流、Manus 步进面板与 Markdown 渲染；支持 Docker / Nginx 静态部署（**须 `proxy_buffering off`**） | 开发 **5173**；生产由 Nginx 反代 `/api` → 8081 |
+| [**wiselink-mcp-ecosystem**](https://github.com/leungtzemeen/wiselink-mcp-ecosystem) | **MCP Server 子进程**：由主应用 stdio 拉起；提供 **`exportShoppingReport`**（Markdown → PDF）等工具；同时在 **8082** 提供 HTTP（PDF `/exports/**`、MCP WebMVC）。工作区与日志由 **`WISELINK_MCP_WORKSPACE_ROOT`** 驱动；配置与 logback 与主仓同样 **jar / `target/config` 分离** | **8082**（HTTP）；stdio 与主应用通信 |
+
+**联调关系（简图）**：
+
+```
+浏览器 → wiselink-console-ui → HTTP/SSE → 本仓库 :8081/api
+                              ↘ stdio MCP ↘ wiselink-mcp-ecosystem（+ 高德 map-server 等）
+```
+
+主应用 `application.yml` 中 `wiselink-mcp-ecosystem` 的 jar 路径、`--spring.config.location`、`--logging.config` 需指向 ecosystem 仓库 **`target/`** 产物；前端 `.env` 中 `VITE_API_BASE` 建议走同源 `/api` 代理。各仓 README 有各自的构建与部署说明。
+
+---
+
 ## 核心能力清单
 
 - **WiseLink AI（智选灵犀）**：Java 21 + Spring Boot 3.4 + Spring AI 1.1 的 **电商导购 Agent**，Modular RAG（查询重写 → 分身扩展 → 向量检索 → 上下文注入）+ Function Calling + MCP 外部工具。
